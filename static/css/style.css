@@ -1,0 +1,97 @@
+body {
+    margin: 0;
+    font-family: sans-serif;
+    background: #202020;
+    color: white;
+}
+
+header {
+    padding: 12px;
+    background: #303030;
+}
+
+h1 {
+    margin: 0;
+    font-size: 20px;
+}
+
+#canvas-section {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+}
+
+#tool-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    width: 150px;
+    padding: 10px;
+
+    background-color: blue;
+}
+
+#tool-bar button {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+#hex-canvas {
+    display: block;
+    background: #111;
+}
+
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hidden {
+    display: none;
+}
+
+.modal-content {
+    background: #303030;
+    padding: 20px;
+    border-radius: 8px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    width: 250px;
+}
+
+.modal-content input {
+    padding: 6px;
+}
+
+#brush-btn.active {
+    background-color: orange;
+}
+
+#terrain-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.terrain-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.color-sample {
+    width: 16px;
+    height: 16px;
+    border: 1px solid #222;
+}
