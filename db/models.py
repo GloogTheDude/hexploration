@@ -135,6 +135,39 @@ class WorldMap(Base):
 
     campaign: Mapped[Campaign] = relationship(back_populates="maps")
     versions: Mapped[list[MapVersion]] = relationship(back_populates="map", cascade="all, delete-orphan")
+    features: Mapped[list[MapFeature]] = relationship(back_populates="map", cascade="all, delete-orphan")
+
+
+class MapFeature(Base):
+    """Campaign/map-scoped semantic identity shared by all MapVersions.
+
+    ``feature_id`` is the stable integer used by WorldEvent.target_id. The
+    concrete POI/edge rows may be recreated for each MapVersion, but this
+    identity remains stable across those versions.
+    """
+
+    __tablename__ = "map_features"
+    __table_args__ = (
+        UniqueConstraint(
+            "campaign_id", "feature_type", "feature_id",
+            name="uq_map_feature_campaign_type_id",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    campaign_id: Mapped[int] = mapped_column(
+        ForeignKey("campaigns.id", ondelete="CASCADE"), index=True
+    )
+    map_id: Mapped[int] = mapped_column(
+        ForeignKey("maps.id", ondelete="CASCADE"), index=True
+    )
+    feature_type: Mapped[str] = mapped_column(String(80), index=True)
+    feature_id: Mapped[int] = mapped_column(Integer(), index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    map: Mapped[WorldMap] = relationship(back_populates="features")
 
 
 class MapVersion(Base):
@@ -167,6 +200,7 @@ class MapHex(Base):
     r: Mapped[int] = mapped_column(Integer())
     terrain_key: Mapped[str] = mapped_column(String(80), default="SEA")
     elevation: Mapped[int] = mapped_column(Integer(), default=0)
+    visibility_score: Mapped[int] = mapped_column(Integer(), default=3)
     travel_cost: Mapped[float] = mapped_column(Float(), default=1.0)
     extra_data: Mapped[dict] = mapped_column(JSON(), default=dict)
 
@@ -211,6 +245,7 @@ class PointOfInterest(Base):
     __tablename__ = "points_of_interest"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    feature_id: Mapped[int] = mapped_column(Integer(), index=True)
     hex_id: Mapped[int] = mapped_column(ForeignKey("map_hexes.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(160))
     kind: Mapped[str | None] = mapped_column(String(80))
@@ -292,6 +327,100 @@ class WorldEvent(Base):
     target_id: Mapped[int | None] = mapped_column(Integer())
     payload: Mapped[dict] = mapped_column(JSON(), default=dict)
     dm_note: Mapped[str | None] = mapped_column(Text())
+
+
+class CharacterKnowledgeObservation(Base):
+    __tablename__ = "character_knowledge_observations"
+    __table_args__ = (
+        UniqueConstraint(
+            "character_id",
+            "target_type",
+            "target_id",
+            "observed_game_minute",
+            "expedition_id",
+            name="uq_character_knowledge_observation",
+        ),
+        CheckConstraint(
+            "observed_game_minute >= 0",
+            name="ck_character_knowledge_observed_minute_positive",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    character_id: Mapped[int] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"),
+        index=True,
+    )
+    expedition_id: Mapped[int | None] = mapped_column(
+        ForeignKey("expeditions.id", ondelete="SET NULL"),
+        index=True,
+    )
+    target_type: Mapped[str] = mapped_column(String(80), index=True)
+    target_id: Mapped[int] = mapped_column(Integer(), index=True)
+    observed_game_minute: Mapped[int] = mapped_column(BigInteger(), index=True)
+    source_type: Mapped[str] = mapped_column(String(80), default="OBSERVATION")
+    knowledge: Mapped[dict] = mapped_column(JSON(), default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+    )
+
+    character: Mapped[Character] = relationship()
+    expedition: Mapped[Expedition | None] = relationship()
+
+
+class CharacterMapHexObservation(Base):
+    __tablename__ = "character_map_hex_observations"
+    __table_args__ = (
+        UniqueConstraint(
+            "character_id",
+            "map_id",
+            "q",
+            "r",
+            "observed_game_minute",
+            "expedition_id",
+            name="uq_character_map_hex_observation",
+        ),
+        CheckConstraint(
+            "observed_game_minute >= 0",
+            name="ck_character_map_hex_observed_minute_positive",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    character_id: Mapped[int] = mapped_column(
+        ForeignKey("characters.id", ondelete="CASCADE"),
+        index=True,
+    )
+    expedition_id: Mapped[int | None] = mapped_column(
+        ForeignKey("expeditions.id", ondelete="SET NULL"),
+        index=True,
+    )
+    map_id: Mapped[int] = mapped_column(
+        ForeignKey("maps.id", ondelete="CASCADE"),
+        index=True,
+    )
+    map_version_id: Mapped[int] = mapped_column(
+        ForeignKey("map_versions.id", ondelete="RESTRICT"),
+        index=True,
+    )
+    q: Mapped[int] = mapped_column(Integer(), index=True)
+    r: Mapped[int] = mapped_column(Integer(), index=True)
+    observed_game_minute: Mapped[int] = mapped_column(BigInteger(), index=True)
+    discovery_state: Mapped[str] = mapped_column(String(20), default="SEEN")
+    terrain_key: Mapped[str] = mapped_column(String(80))
+    elevation: Mapped[int] = mapped_column(Integer())
+    visibility_score: Mapped[int] = mapped_column(Integer())
+    extra_data: Mapped[dict] = mapped_column(JSON(), default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+    )
+
+    character: Mapped[Character] = relationship()
+    expedition: Mapped[Expedition | None] = relationship()
+    map: Mapped[WorldMap] = relationship()
+    map_version: Mapped[MapVersion] = relationship()
 
 
 class DebriefTemplate(Base):

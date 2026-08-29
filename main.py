@@ -13,11 +13,18 @@ from routes.movement_modifier_routes import router as movement_modifier_router
 from routes.world_event_routes import router as world_event_router
 from routes.map_edge_routes import router as map_edge_router
 from routes.poi_routes import router as poi_router
+from routes.knowledge_routes import router as knowledge_router
+from routes.wiki_routes import router as wiki_router
+from routes.recall_routes import router as recall_router
+from routes.visibility_routes import router as visibility_router
+from routes.map_knowledge_routes import router as map_knowledge_router
+from routes.player_map_routes import router as player_map_router
+from routes.dm_dashboard_routes import router as dm_dashboard_router
 
 
 app = FastAPI(
     title="Hexploration",
-    version="0.6.0-temporal-poi",
+    version="0.21.0-dm-map-features",
 )
 
 app.include_router(map_router)
@@ -32,6 +39,13 @@ app.include_router(movement_modifier_router)
 app.include_router(world_event_router)
 app.include_router(map_edge_router)
 app.include_router(poi_router)
+app.include_router(knowledge_router)
+app.include_router(wiki_router)
+app.include_router(recall_router)
+app.include_router(visibility_router)
+app.include_router(map_knowledge_router)
+app.include_router(player_map_router)
+app.include_router(dm_dashboard_router)
 
 # Keep this last: mounting "/" first would swallow /api routes.
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

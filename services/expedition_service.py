@@ -7,6 +7,7 @@ from dto.expedition_dto import ExpeditionCreate
 from repositories.campaign_repository import CampaignRepository
 from repositories.expedition_repository import ExpeditionRepository
 from services.errors import ConflictError, ForbiddenOperationError, NotFoundError
+from services.visibility_service import VisibilityService
 
 
 class ExpeditionService:
@@ -14,6 +15,7 @@ class ExpeditionService:
         self.db = db
         self.repo = ExpeditionRepository(db)
         self.campaigns = CampaignRepository(db)
+        self.visibility = VisibilityService(db)
 
     def create(self, campaign_id: int, data: ExpeditionCreate) -> Expedition:
         if self.campaigns.get(campaign_id) is None:
@@ -108,6 +110,21 @@ class ExpeditionService:
             raise ConflictError("An expedition needs at least one character")
 
         expedition.status = ExpeditionStatus.ACTIVE
+        for participant in self.repo.list_participants(expedition_id):
+            if participant.left_game_minute is None:
+                character = self.repo.get_character(participant.character_id)
+                if character is not None:
+                    character.current_game_minute = max(
+                        character.current_game_minute,
+                        expedition.current_game_minute,
+                    )
+
+        if (
+            expedition.current_map_version_id is not None
+            and expedition.current_q is not None
+            and expedition.current_r is not None
+        ):
+            self.visibility.observe_visible_pois(expedition.id, commit=False)
         self.db.commit()
         self.db.refresh(expedition)
         return expedition

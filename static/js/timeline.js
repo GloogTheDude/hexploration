@@ -1,3 +1,6 @@
+const embedded = new URLSearchParams(window.location.search).get("embedded") === "1";
+if (embedded) document.body.classList.add("embedded");
+
 const $ = (id) => document.getElementById(id);
 
 const campaignIdInput = $("campaign-id");

@@ -246,3 +246,455 @@ Run `pytest`: expected 19 passed.
 All SQLAlchemy Python-side timestamp defaults now use timezone-aware UTC datetimes (`datetime.now(UTC)`) instead of deprecated `datetime.utcnow()`. This removes the Python 3.14 deprecation warnings while preserving `DateTime(timezone=True)` semantics.
 
 Validation: `pytest` -> 19 passed, 0 warnings.
+
+## v9 - Discovery / character knowledge
+
+World truth and character knowledge are now separate layers.
+
+A POI can exist in canonical `WorldEvent` state without being known by a
+character. A discovery creates an immutable `CharacterKnowledgeObservation`
+snapshot at the expedition's current `game_minute`.
+
+Example:
+
+```text
+minute 100: expedition discovers Old Watchtower -> character knows ACTIVE
+minute 200: POI_DESTROYED                  -> world truth is DESTROYED
+minute 250: before re-observation           -> character still knows ACTIVE
+minute 250: expedition observes it again    -> character now knows DESTROYED
+```
+
+Knowledge history is preserved, so the application can answer both "what does
+this character know now?" and "what did this character know at minute 150?".
+Discovery is shared with every active character currently in the expedition.
+For this first gameplay slice, a POI can only be discovered while the expedition
+is physically on the POI's hex. Visibility/range/passive discovery can build on
+this later.
+
+Routes:
+
+```text
+POST /api/expeditions/{expedition_id}/pois/{poi_id}/discover
+GET  /api/characters/{character_id}/knowledge
+GET  /api/characters/{character_id}/knowledge/{target_type}/{target_id}
+GET  /api/characters/{character_id}/knowledge/{target_type}/{target_id}/history
+```
+
+The two `GET` knowledge endpoints that return current state accept an optional
+`as_of_game_minute` query parameter where applicable.
+
+Database migration:
+
+```text
+0004_character_knowledge
+```
+
+Upgrade an existing v0.1.0 database with:
+
+```bash
+alembic upgrade head
+```
+
+Then run:
+
+```bash
+pytest
+```
+
+## v10 - Expedition reports -> temporal hub wiki
+
+Discovery/knowledge remains character-level while explorers are away from the hub.
+A returned expedition can now publish one report. When `publish_knowledge=true`,
+the latest observation for each POI from that expedition is projected into a
+campaign wiki revision.
+
+Crucially, the wiki revision becomes available at the expedition's **in-world
+return minute**, not at the wall-clock time when the HTTP request is made.
+
+Example:
+
+```text
+minute 100 -> expedition discovers Old Watchtower = ACTIVE
+minute 200 -> world truth: POI_DESTROYED
+minute 300 -> expedition returns and publishes its report
+
+hub wiki @ 299 -> no page yet
+hub wiki @ 300 -> Old Watchtower = ACTIVE (the expedition's last observation)
+```
+
+A later expedition can observe the destruction and publish a second revision:
+
+```text
+minute 450 -> second expedition observes DESTROYED
+minute 500 -> second expedition returns
+
+hub wiki @ 450 -> revision 1 / ACTIVE
+hub wiki @ 500 -> revision 2 / DESTROYED
+```
+
+Routes:
+
+```text
+POST /api/expeditions/{expedition_id}/report
+GET  /api/expeditions/{expedition_id}/report
+GET  /api/campaigns/{campaign_id}/wiki?as_of_game_minute=...
+GET  /api/campaigns/{campaign_id}/wiki/pages/{page_id}?as_of_game_minute=...
+```
+
+Example report publication:
+
+```json
+{
+  "title": "Northern ruins expedition",
+  "content": "Returned safely after surveying the old tower.",
+  "publish_knowledge": true
+}
+```
+
+No Alembic migration is required for v10: the existing `expedition_reports`,
+`wiki_pages`, and `wiki_revisions` tables already model this layer.
+
+`KnowledgeRecall` is still deliberately separate and will be the next layer for
+characters outside the hub.
+
+## v0.9 - Knowledge Recall outside the hub
+
+An active expedition can now consult a limited amount of campaign Wiki knowledge
+while away from the hub without receiving information published after departure.
+
+The temporal cutoff is always the expedition's `start_game_minute`:
+
+```text
+wiki revision @ 100 -> bridge open
+expedition leaves @ 200
+wiki revision @ 400 -> bridge destroyed
+character recalls @ 500 -> still receives revision @ 100
+```
+
+Starter rule: each character can unlock up to **3 unique pages** per expedition.
+The limit is exposed as `DEFAULT_RECALL_LIMIT_PER_CHARACTER` in
+`services/recall_service.py`, so it can later become campaign-configurable without
+changing the recall model.
+
+A recalled page is shared with the whole expedition. Another character reading an
+already-unlocked page does not spend one of their own recall slots. Recalled pages
+remain pinned to the hub knowledge cutoff from expedition departure even if newer
+Wiki revisions are published while the party is away.
+
+Routes:
+
+```text
+GET  /api/expeditions/{expedition_id}/recall/status?character_id=...
+GET  /api/expeditions/{expedition_id}/recall/search?character_id=...&q=...
+POST /api/expeditions/{expedition_id}/recall
+GET  /api/expeditions/{expedition_id}/recall
+```
+
+Recall request:
+
+```json
+{
+  "character_id": 12,
+  "page_id": 4
+}
+```
+
+The existing `knowledge_recalls` table already supports this feature, so v0.9 does
+not require a new Alembic migration.
+
+## v12 - Automatic expedition visibility and POI discovery
+
+Exploration now resolves visible POIs automatically from the expedition's
+current position and in-world minute. `MapHex.visibility_score` is persisted per
+map version so historical maps keep the visibility rules they were created
+with.
+
+Starter visibility model:
+
+```text
+max visible distance =
+    origin hex visibility_score
+    - weather penalty
+    + landmark bonus
+    + observer elevation bonus
+    - target terrain concealment
+```
+
+Current-hex POIs are always observable. The first rule set uses weather
+penalties (`RAIN`, `HEAVY_RAIN`, `STORM`, `SNOW`, `BLIZZARD`, `FOG`), a +2 range
+bonus for landmarks, up to +2 for observer elevation advantage, and concealment
+for terrain with a visibility score below the neutral score of 3.
+
+This iteration deliberately does **not** perform ray-cast/occlusion through
+intervening hexes yet. The scoring service is isolated so line-of-sight can be
+added later without changing knowledge storage.
+
+Routes:
+
+```text
+GET  /api/expeditions/{expedition_id}/visibility
+POST /api/expeditions/{expedition_id}/visibility/observe
+```
+
+`GET` previews what is visible without changing knowledge. `POST` records the
+visible POIs as `AUTO_VISIBILITY` knowledge observations. Starting a positioned
+expedition, setting the position of an already-active expedition, and completing
+a movement all perform this observation automatically.
+
+Unchanged POIs are not written repeatedly while the same expedition keeps them
+in sight. A changed world state, or observation by a new expedition, creates a
+new immutable knowledge snapshot.
+
+New migration:
+
+```text
+0005_map_hex_visibility
+```
+
+Run:
+
+```bash
+alembic upgrade head
+pytest
+```
+
+## v13 - Hex line-of-sight and terrain occlusion
+
+The v12 visibility range is now followed by a deterministic hex line-of-sight
+check. The service traces the axial line from the expedition hex to each POI and
+examines every intermediate map hex.
+
+An intermediate hex can block sight for three reasons:
+
+```text
+MISSING_HEX          -> map geometry is absent; visibility never crosses the void
+ELEVATION            -> terrain rises above the interpolated sight line
+TERRAIN_CONCEALMENT  -> dense terrain adds effective obstacle height
+```
+
+Dense terrain is derived from the already-persisted `visibility_score`:
+
+```text
+opacity height = max(0, 3 - visibility_score)
+```
+
+So open terrain with score 3+ adds no LOS height, while forest-like score 2 adds
+one effective level. A sufficiently elevated observer can therefore see over
+some concealing terrain instead of concealment acting as an infinite wall.
+
+The preview endpoint now exposes both `visible_pois` and `occluded_pois`.
+Occluded entries include the blocker coordinate, blocker reason, interpolated
+sight-line height and the complete deterministic hex path. This is intended to
+make map-rule balancing/debugging inspectable from the future frontend.
+
+No migration is required for v13; the LOS model uses existing versioned
+`MapHex.elevation` and `MapHex.visibility_score` data.
+
+Run:
+
+```bash
+pytest
+```
+
+## v14 - Fog of war and temporal map knowledge
+
+Map geometry is now part of player knowledge instead of being implicitly known.
+Every active expedition visibility pass records immutable per-character hex
+observations for the cells that are actually visible through the v13 range + LOS
+rules.
+
+Fog states are intentionally simple for the first implementation:
+
+```text
+UNKNOWN -> never observed
+SEEN    -> observed from another hex
+VISITED -> the expedition physically occupied the hex
+```
+
+`VISITED` is monotonic: seeing the same coordinate again from a distance never
+downgrades it back to `SEEN`.
+
+Map knowledge identity is `(map_id, q, r)` rather than `MapHex.id`. This allows
+new `MapVersion` rows to replace the world representation while a character
+keeps the last terrain/elevation/metadata snapshot they actually observed. A
+later re-observation creates a new temporal snapshot, so queries with
+`as_of_game_minute` reconstruct what the character believed the map looked like
+at that point in campaign time.
+
+New routes:
+
+```text
+GET /api/characters/{character_id}/map-knowledge/{map_id}
+GET /api/characters/{character_id}/map-knowledge/{map_id}/{q}/{r}
+GET /api/characters/{character_id}/map-knowledge/{map_id}/{q}/{r}/history
+GET /api/expeditions/{expedition_id}/map-knowledge/{map_id}
+```
+
+The existing visibility preview also exposes `visible_hexes` and
+`occluded_hexes`, including LOS blocker/debug information. The observe endpoint
+returns both POI knowledge observations and map-hex observations.
+
+Automatic map knowledge updates happen in the same places as POI observation:
+starting a positioned expedition, positioning an active expedition, and arriving
+after movement.
+
+New migration:
+
+```text
+0006_character_map_knowledge
+```
+
+Run:
+
+```bash
+alembic upgrade head
+pytest
+```
+
+## v15 — Player fog-of-war map
+
+A player-facing expedition map is now available at `/player.html`.
+
+The page renders only information already present in player knowledge:
+
+- `UNKNOWN`: not rendered as terrain; only generic adjacent movement outlines are shown.
+- `SEEN`: known terrain rendered muted.
+- `VISITED`: known terrain rendered with a stronger border.
+- known POIs come from immutable expedition knowledge snapshots, never live world truth.
+- the current expedition position is shown separately.
+
+The consolidated API endpoint is:
+
+```text
+GET /api/expeditions/{expedition_id}/player-map
+```
+
+It intentionally does **not** enumerate canonical map hexes or undiscovered POIs. The UI supports pan, zoom, fit-to-known-map, hex inspection, selection of unknown adjacent destinations, and movement through the existing movement endpoint. A successful movement refreshes fog-of-war knowledge automatically.
+
+
+## v16 — Legacy visibility bootstrap + player dashboard
+
+- `POST /api/expeditions/{id}/player-map/bootstrap` initializes fog-of-war at the expedition current position/time only.
+- `player.html` automatically bootstraps active positioned legacy expeditions that have zero map knowledge.
+- The player renderer always draws the current hex and six unknown adjacent movement choices, even with zero observations.
+- `/dashboard.html` lets a user select campaigns and open their participating expeditions without manually copying expedition IDs.
+- No Alembic migration is required after v15.
+
+## v17 — Player-map canvas rendering fix
+
+The player map canvas now keeps its backing bitmap synchronized with its actual CSS size on every draw. This fixes a race where a tiny initial canvas bitmap could be stretched by the browser, making the current-position marker (`#eef7ff`) appear as a full white map. A `ResizeObserver`, first-frame layout wait, and dark canvas fallback were added. Regression checks cover the sizing contract.
+
+
+## v18 — Gameplay dashboard
+
+`/dashboard.html` now keeps Campaign → Character → Expedition context in one place and exposes Map / Wiki / Recall tabs. Active expeditions never receive the live hub wiki: the Wiki tab only renders pages already recalled by that expedition. Recall search is resolved against the temporal wiki cutoff at expedition departure and recalled pages become shared expedition knowledge. URL state (`user`, `campaign`, `character`, `expedition`) makes the dashboard directly linkable.
+
+## v19 — DM Campaign Dashboard
+
+The DM control center is available at `/dm.html`.
+
+It intentionally uses a DM-only aggregate endpoint instead of exposing the campaign control surface through player APIs:
+
+- `GET /api/users/{user_id}/dm-campaigns`
+- `GET /api/campaigns/{campaign_id}/dm-dashboard?user_id=...`
+
+The dashboard provides campaign clock/reference state, active and historical expeditions, participant lists, start/return actions, persistent map/version inventory, character clocks/statuses, recent WorldEvents, a temporal World State inspector, and an embedded full Timeline editor.
+
+There is still no real authentication layer: `user_id` is explicit temporary context. The backend nevertheless verifies that the requested user has a `DM` membership for the campaign before returning the DM aggregate.
+
+## v20 — DM expedition planner
+
+The DM Control Center can now create a complete expedition without going through Swagger:
+
+- choose the in-world departure minute;
+- select one or more available ACTIVE characters;
+- choose a persisted `MapVersion` and starting `(q, r)`;
+- choose party transport;
+- keep the expedition in `PLANNING` or start it immediately.
+
+The dedicated DM endpoint validates the full setup before writing anything. It rejects non-DM users, characters already assigned to another open expedition, temporal backtracking for a character, a map from another campaign, a starting hex that does not exist, and a map version that is not yet effective at the expedition start minute.
+
+Weather is intentionally **not** selected in the expedition planner: weather is campaign World Truth and continues to be resolved temporally from `WorldEvent`, while transport remains expedition state.
+
+DM start/return buttons now use DM-authorized campaign endpoints instead of the generic expedition actions. Starting an expedition also synchronizes participating character clocks to the expedition clock.
+
+No Alembic migration is required for v20.
+
+## v21 — campaign creation + DM map feature workbench
+
+The DM control center can now create campaigns directly (the current user is automatically added as DM by the existing CampaignService) and select the newly created campaign without using Swagger.
+
+The `Cartes & versions` tab now contains a persisted-map workbench. A DM can load a MapVersion, select a hex visually, create/update a POI, create an adjacent ROAD/BRIDGE/PASSAGE/TRAVERSAL feature, and create temporal WorldEvents targeted at the selected semantic POI/feature. Feature event targeting uses `(feature_type, feature_id)`, not the internal MapEdge row id.
+
+DM-only endpoints added:
+
+- `GET /api/campaigns/{campaign_id}/dm-map-workbench`
+- `POST /api/campaigns/{campaign_id}/dm-map-versions/{map_version_id}/pois`
+- `PATCH /api/campaigns/{campaign_id}/dm-pois/{poi_id}`
+- `POST /api/campaigns/{campaign_id}/dm-map-versions/{map_version_id}/edges`
+- `POST /api/campaigns/{campaign_id}/dm-pois/{poi_id}/world-events`
+- `POST /api/campaigns/{campaign_id}/dm-map-edges/{edge_id}/world-events`
+
+No Alembic migration is required for v21.
+
+## v22 — campaign bootstrap: members, characters, persisted terrain
+
+A newly created campaign can now reach its first playable expedition without using Swagger.
+
+The DM dashboard `Personnages` tab now lists campaign memberships and lets a DM:
+
+- add an existing user to the campaign as PLAYER or DM;
+- create a character for any campaign member;
+- set the character's starting in-world minute.
+
+DM-only endpoints added:
+
+```text
+POST /api/campaigns/{campaign_id}/dm-members?user_id=...
+POST /api/campaigns/{campaign_id}/dm-characters?user_id=...
+POST /api/campaigns/{campaign_id}/dm-maps/from-editor?user_id=...
+```
+
+The terrain editor is campaign-aware when opened as:
+
+```text
+/?user={dm_user_id}&campaign={campaign_id}
+```
+
+It exposes a persistence bar that snapshots the current in-memory terrain into a new persistent `WorldMap` + initial `MapVersion`, using the existing frozen terrain movement/visibility values. The save endpoint verifies DM membership server-side. After persistence the new map becomes available in the DM dashboard Map Workbench and expedition planner.
+
+This version intentionally creates a *new* persistent map from the editor. Creating a later terrain `MapVersion` for an existing map is deferred until semantic POI/feature identity across versions is formalized, so temporal WorldEvent targets cannot silently break when rows are copied between versions.
+
+No Alembic migration is required for v22.
+
+## v23 — semantic feature identities + real MapVersion workflow
+
+MapVersion rows are now allowed to evolve without breaking temporal WorldEvent targets.
+
+- New `map_features` registry stores campaign-scoped semantic identities.
+- `PointOfInterest.feature_id` is now the stable POI identity used by `WorldEvent.target_id`, character knowledge, wiki projection and future versions.
+- Existing POI rows are backfilled with `feature_id = old poi.id`, so historical `POI_*` events remain valid after migration.
+- Existing `MapEdge.feature_id` values are registered as semantic feature identities and preserved across versions.
+- Creating a new map version from the terrain editor copies POIs and edges to new concrete rows while preserving their semantic feature ids.
+- Loading a persisted version into the editor rehydrates its frozen terrain movement/visibility/elevation values rather than silently replacing them with current defaults.
+
+DM workflow:
+
+1. `Cartes & versions` → click **Éditer → nouvelle version** on a persisted version.
+2. The editor loads that version from PostgreSQL.
+3. Paint the terrain.
+4. Choose the effective game minute and click **Créer la nouvelle version**.
+5. The new `MapVersion` receives `parent_version_id`, a new version number and copied POI/edge rows with unchanged semantic identities.
+
+New DM endpoints:
+
+- `POST /api/campaigns/{campaign_id}/dm-map-versions/{map_version_id}/load-editor?user_id=...`
+- `POST /api/campaigns/{campaign_id}/dm-maps/{map_id}/versions/from-editor?user_id=...`
+
+Database migration:
+
+```bash
+alembic upgrade head
+```
+
+New head: `0007_semantic_map_features`.

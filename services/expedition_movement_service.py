@@ -13,6 +13,7 @@ from services.errors import (
 )
 from services.movement_cost_service import MovementCostService
 from services.world_event_service import WorldEventService
+from services.visibility_service import VisibilityService
 
 
 class InvalidMovementError(Exception):
@@ -33,6 +34,7 @@ class ExpeditionMovementService:
         self.repo = MovementRepository(db)
         self.costs = MovementCostService()
         self.world_events = WorldEventService(db)
+        self.visibility = VisibilityService(db)
 
     def set_position(
         self,
@@ -71,6 +73,9 @@ class ExpeditionMovementService:
         expedition.current_map_version_id = data.map_version_id
         expedition.current_q = data.q
         expedition.current_r = data.r
+
+        if expedition.status == ExpeditionStatus.ACTIVE:
+            self.visibility.observe_visible_pois(expedition.id, commit=False)
 
         self.db.commit()
         self.db.refresh(expedition)
@@ -203,6 +208,11 @@ class ExpeditionMovementService:
                     character.current_game_minute,
                     arrival,
                 )
+
+        # Arrival changes both position and in-world time. Resolve visibility at
+        # that exact arrival minute and persist newly learned/changed POI state
+        # in the same transaction as the movement.
+        self.visibility.observe_visible_pois(expedition.id, commit=False)
 
         self.db.commit()
         self.db.refresh(movement)

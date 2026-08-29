@@ -11,6 +11,7 @@ class POICreate(BaseModel):
 class POIResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    feature_id: int
     hex_id: int
     name: str
     kind: str | None

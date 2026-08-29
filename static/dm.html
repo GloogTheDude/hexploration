@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hexploration — DM Dashboard</title>
+  <link rel="stylesheet" href="/css/dm.css">
+  <script type="module" src="/js/dm.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <div class="eyebrow">DM Control Center</div>
+    <h1>Hexploration</h1>
+    <p>Campagne, monde, expéditions et timeline dans une seule interface.</p>
+  </div>
+  <nav>
+    <a href="/dashboard.html">Joueur</a>
+    <a href="/player.html">Carte joueur</a>
+    <a href="/timeline.html">Timeline</a>
+    <a href="/">Editor</a>
+  </nav>
+</header>
+
+<main class="shell">
+  <aside class="sidebar">
+    <section class="panel identity">
+      <h2>Dungeon Master</h2>
+      <label>User ID
+        <div class="input-row"><input id="user-id" type="number" min="1" value="1"><button id="load-user">Charger</button></div>
+      </label>
+      <p id="identity-message" class="muted">Charge un utilisateur pour afficher ses campagnes MJ.</p>
+      <p id="error" class="error" role="alert"></p>
+    </section>
+
+    <section class="panel">
+      <div class="section-head"><h2>Campagnes MJ</h2><span id="campaign-count" class="badge">0</span></div>
+      <button id="toggle-campaign-create" class="secondary full-button" type="button">+ Nouvelle campagne</button>
+      <form id="campaign-create-form" class="campaign-create hidden">
+        <label>Nom<input id="campaign-create-name" maxlength="160" placeholder="Les Marches du Nord" required></label>
+        <label>Nom de l'époque<input id="campaign-create-epoch" maxlength="80" value="Day 1" required></label>
+        <label>Description<textarea id="campaign-create-description" rows="3" placeholder="Description MJ / pitch de campagne"></textarea></label>
+        <div class="planner-actions"><button type="submit">Créer</button><button id="cancel-campaign-create" type="button" class="secondary">Annuler</button></div>
+        <p id="campaign-create-message" class="muted"></p>
+      </form>
+      <div id="campaigns" class="stack"><div class="empty">Aucune campagne chargée.</div></div>
+    </section>
+
+    <section class="panel campaign-clock">
+      <div class="eyebrow">Horloge de référence</div>
+      <strong id="campaign-minute">—</strong>
+      <span id="campaign-day" class="muted">Sélectionne une campagne.</span>
+    </section>
+  </aside>
+
+  <section class="workspace">
+    <section class="panel hero">
+      <div>
+        <div class="eyebrow">Campagne active</div>
+        <h2 id="campaign-title">Aucune campagne sélectionnée</h2>
+        <p id="campaign-description" class="muted">Choisis une campagne MJ dans la colonne de gauche.</p>
+      </div>
+      <div id="campaign-actions" class="actions"></div>
+    </section>
+
+    <section id="stats" class="stats hidden">
+      <article class="stat"><span>Expéditions actives</span><strong id="stat-expeditions">0</strong></article>
+      <article class="stat"><span>Personnages</span><strong id="stat-characters">0</strong></article>
+      <article class="stat"><span>Cartes</span><strong id="stat-maps">0</strong></article>
+      <article class="stat"><span>Événements récents</span><strong id="stat-events">0</strong></article>
+    </section>
+
+    <section class="panel main-panel">
+      <div class="tabs" role="tablist">
+        <button class="tab selected" data-tab="overview">Vue d’ensemble</button>
+        <button class="tab" data-tab="expeditions">Expéditions</button>
+        <button class="tab" data-tab="world">État du monde</button>
+        <button class="tab" data-tab="maps">Cartes & versions</button>
+        <button class="tab" data-tab="characters">Personnages</button>
+        <button class="tab" data-tab="timeline">Timeline</button>
+      </div>
+
+      <div id="empty" class="empty-state">
+        <strong>Sélectionne une campagne.</strong>
+        <span>Les outils MJ apparaîtront ici.</span>
+      </div>
+
+      <section id="tab-overview" class="tab-panel hidden" data-panel="overview">
+        <div class="overview-grid">
+          <article class="block">
+            <div class="block-head"><h3>Expéditions actives</h3><button data-jump="expeditions" class="ghost">Gérer</button></div>
+            <div id="overview-expeditions" class="list"></div>
+          </article>
+          <article class="block">
+            <div class="block-head"><h3>Derniers événements</h3><button data-jump="timeline" class="ghost">Timeline</button></div>
+            <div id="overview-events" class="list"></div>
+          </article>
+          <article class="block wide">
+            <div class="block-head"><h3>Cartes persistées</h3><button data-jump="maps" class="ghost">Voir les versions</button></div>
+            <div id="overview-maps" class="map-strip"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="tab-expeditions" class="tab-panel hidden" data-panel="expeditions">
+        <section class="expedition-planner">
+          <div class="planner-head">
+            <div><div class="eyebrow">Préparation</div><h3>Nouvelle expédition</h3><p class="muted">Compose le groupe, place-le sur une version de carte et démarre-le immédiatement ou garde-le en planning.</p></div>
+            <button id="toggle-planner" class="secondary">Afficher le planner</button>
+          </div>
+          <form id="expedition-planner-form" class="planner-form hidden">
+            <div class="planner-grid">
+              <label>Nom<input id="plan-name" maxlength="160" placeholder="Expédition du Nord" required></label>
+              <label>Minute de départ<input id="plan-minute" type="number" min="0" value="0" required></label>
+              <label>Version de carte<select id="plan-map-version" required></select></label>
+              <label>Transport<select id="plan-transport"><option value="FOOT">À pied</option><option value="HORSE">Cheval</option><option value="CART">Chariot</option><option value="BOAT">Bateau</option></select></label>
+              <label>Q<input id="plan-q" type="number" value="0" required></label>
+              <label>R<input id="plan-r" type="number" value="0" required></label>
+            </div>
+            <fieldset class="planner-characters"><legend>Personnages disponibles</legend><div id="plan-characters" class="character-picks"></div></fieldset>
+            <label class="check-row"><input id="plan-start-now" type="checkbox" checked> Démarrer immédiatement après création</label>
+            <div class="planner-actions"><button type="submit">Créer l'expédition</button><span id="planner-message" class="muted"></span></div>
+          </form>
+        </section>
+        <div class="split-layout">
+          <div>
+            <div class="panel-toolbar"><div><strong>Toutes les expéditions</strong><span class="muted">Planning, actives et historiques.</span></div><button id="refresh-expeditions">Actualiser</button></div>
+            <div id="expedition-list" class="record-list"></div>
+          </div>
+          <aside id="expedition-detail" class="detail"><p class="muted">Sélectionne une expédition.</p></aside>
+        </div>
+      </section>
+
+      <section id="tab-world" class="tab-panel hidden" data-panel="world">
+        <div class="world-toolbar">
+          <label>Minute de campagne <input id="world-minute" type="number" min="0" value="0"></label>
+          <button id="inspect-world">Résoudre l’état</button>
+          <button id="use-current-minute" class="secondary">Utiliser l’horloge</button>
+        </div>
+        <div id="world-summary" class="world-summary"><p class="muted">Choisis une minute pour inspecter la World Truth.</p></div>
+        <div class="world-columns">
+          <article class="block"><h3>Événements globaux résolus</h3><div id="world-global" class="list"></div></article>
+          <article class="block"><h3>États ciblés résolus</h3><div id="world-targets" class="list"></div></article>
+        </div>
+      </section>
+
+      <section id="tab-maps" class="tab-panel hidden" data-panel="maps">
+        <div class="panel-toolbar"><div><strong>Cartes persistées & features MJ</strong><span class="muted">Crée le terrain dans l’éditeur, persiste-le dans la campagne puis gère POI, routes, ponts et événements temporels.</span></div><a id="map-editor-open" class="button-link" href="/">Créer / éditer le terrain</a></div>
+        <div id="maps-list" class="map-list"></div>
+
+        <section class="map-workbench">
+          <div class="workbench-toolbar">
+            <div>
+              <div class="eyebrow">Map workbench</div>
+              <h3>Features persistées</h3>
+            </div>
+            <label>Version de carte<select id="workbench-version"></select></label>
+            <button id="load-workbench" type="button">Charger</button>
+            <span id="workbench-message" class="muted"></span>
+          </div>
+          <div class="workbench-layout">
+            <div class="dm-map-canvas-wrap">
+              <canvas id="dm-map-canvas" width="1100" height="680"></canvas>
+              <div class="canvas-help">clic: sélectionner · molette: zoom · glisser: déplacer</div>
+            </div>
+            <aside class="workbench-side">
+              <section class="feature-panel">
+                <h4>Hex sélectionné</h4>
+                <div id="selected-hex" class="muted">Aucun hex sélectionné.</div>
+              </section>
+
+              <section class="feature-panel">
+                <div class="block-head"><h4>POI</h4><button id="new-poi" class="ghost" type="button">Nouveau</button></div>
+                <div id="poi-list" class="feature-list"></div>
+                <form id="poi-form" class="feature-form">
+                  <input id="poi-id" type="hidden">
+                  <label>Nom<input id="poi-name" maxlength="160" required></label>
+                  <label>Type<input id="poi-kind" maxlength="80" placeholder="RUIN, TOWN, SHRINE…"></label>
+                  <label class="check-row"><input id="poi-landmark" type="checkbox"> Landmark visible à distance</label>
+                  <label>Description MJ<textarea id="poi-description" rows="3"></textarea></label>
+                  <button type="submit">Enregistrer le POI</button>
+                </form>
+                <form id="poi-event-form" class="feature-form compact-form">
+                  <strong>État temporel du POI</strong>
+                  <label>Minute<input id="poi-event-minute" type="number" min="0" value="0"></label>
+                  <label>Événement<select id="poi-event-type"><option>POI_STATE_CHANGED</option><option>POI_DAMAGED</option><option>POI_DESTROYED</option><option>POI_REBUILT</option><option>POI_OCCUPIED</option><option>POI_ABANDONED</option></select></label>
+                  <label>Payload JSON<input id="poi-event-payload" value="{}"></label>
+                  <label>Note MJ<input id="poi-event-note"></label>
+                  <button type="submit">Ajouter à la timeline</button>
+                </form>
+              </section>
+
+              <section class="feature-panel">
+                <div class="block-head"><h4>Pont / route / passage</h4><button id="edge-use-selected" class="ghost" type="button">Départ = hex</button></div>
+                <div id="edge-selection" class="muted">Choisis un départ puis clique un hex adjacent.</div>
+                <form id="edge-form" class="feature-form">
+                  <label>Type<select id="edge-type"><option>ROAD</option><option>BRIDGE</option><option>PASSAGE</option><option>TRAVERSAL</option></select></label>
+                  <label>Nom<input id="edge-name" maxlength="160" placeholder="Pont du vieux moulin"></label>
+                  <button type="submit">Créer la feature</button>
+                </form>
+                <div id="edge-list" class="feature-list"></div>
+                <form id="edge-event-form" class="feature-form compact-form">
+                  <strong>État temporel de la feature</strong>
+                  <label>Minute<input id="edge-event-minute" type="number" min="0" value="0"></label>
+                  <label>Événement<select id="edge-event-type"><option>ROAD_BLOCKED</option><option>ROAD_REOPENED</option><option>BRIDGE_DESTROYED</option><option>BRIDGE_REPAIRED</option><option>PASSAGE_BLOCKED</option><option>PASSAGE_OPENED</option><option>TRAVERSAL_BLOCKED</option><option>TRAVERSAL_OPENED</option></select></label>
+                  <label>Payload JSON<input id="edge-event-payload" value="{}"></label>
+                  <label>Note MJ<input id="edge-event-note"></label>
+                  <button type="submit">Ajouter à la timeline</button>
+                </form>
+              </section>
+            </aside>
+          </div>
+        </section>
+      </section>
+
+      <section id="tab-characters" class="tab-panel hidden" data-panel="characters">
+        <div class="panel-toolbar"><div><strong>Membres & personnages</strong><span class="muted">Ajoute les joueurs à la campagne puis crée leurs personnages sans passer par Swagger.</span></div></div>
+        <div class="setup-grid">
+          <article class="block">
+            <div class="block-head"><h3>Membres de campagne</h3></div>
+            <div id="members-list" class="member-list"></div>
+            <form id="member-form" class="feature-form compact-form">
+              <strong>Ajouter un membre existant</strong>
+              <label>User ID<input id="member-user-id" type="number" min="1" required></label>
+              <label>Rôle<select id="member-role"><option value="PLAYER">PLAYER</option><option value="DM">DM</option></select></label>
+              <button type="submit">Ajouter à la campagne</button>
+              <span id="member-message" class="muted"></span>
+            </form>
+          </article>
+          <article class="block">
+            <div class="block-head"><h3>Nouveau personnage</h3></div>
+            <form id="character-form" class="feature-form">
+              <label>Propriétaire<select id="character-owner" required></select></label>
+              <label>Nom<input id="character-name" maxlength="120" required></label>
+              <label>Race<input id="character-race" maxlength="120"></label>
+              <label>Classe<input id="character-class" maxlength="120"></label>
+              <label>Niveau<input id="character-level" type="number" min="1" value="1"></label>
+              <label>Minute actuelle<input id="character-minute" type="number" min="0" value="0"></label>
+              <label>Description<textarea id="character-description" rows="3"></textarea></label>
+              <button type="submit">Créer le personnage</button>
+              <span id="character-message" class="muted"></span>
+            </form>
+          </article>
+        </div>
+        <div class="panel-toolbar"><div><strong>Personnages de campagne</strong><span class="muted">Horloge individuelle et état actuel.</span></div></div>
+        <div id="characters-list" class="character-grid"></div>
+      </section>
+
+      <section id="tab-timeline" class="tab-panel hidden timeline-panel" data-panel="timeline">
+        <div class="panel-toolbar"><div><strong>Timeline complète</strong><span class="muted">Création, édition et inspection des WorldEvents.</span></div><a id="timeline-open" class="button-link" href="/timeline.html">Ouvrir en plein écran</a></div>
+        <iframe id="timeline-frame" title="Timeline MJ" loading="lazy"></iframe>
+      </section>
+    </section>
+  </section>
+</main>
+</body>
+</html>

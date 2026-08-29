@@ -37,6 +37,7 @@ def make_map_with_two_hexes(
         r=0,
         terrain_key="PLAIN",
         elevation=1,
+        visibility_score=3,
         travel_cost=1.0,
         extra_data={},
     )
@@ -46,6 +47,7 @@ def make_map_with_two_hexes(
         r=0,
         terrain_key=destination_terrain,
         elevation=1,
+        visibility_score=3,
         travel_cost=destination_travel_cost,
         extra_data={},
     )

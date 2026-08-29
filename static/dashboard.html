@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hexploration — Dashboard</title>
+<link rel="stylesheet" href="/css/dashboard.css">
+<script type="module" src="/js/dashboard.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <h1>Hexploration</h1>
+    <p>Campagne → personnage → expédition → carte / wiki / recall.</p>
+  </div>
+  <nav><a href="/dm.html">DM</a><a href="/player.html">Carte</a><a href="/timeline.html">Timeline</a><a href="/">Editor</a></nav>
+</header>
+
+<main class="dashboard-shell">
+  <aside class="sidebar">
+    <section class="card identity">
+      <h2>Joueur</h2>
+      <div class="row">
+        <label>User ID <input id="user-id" type="number" min="1" value="1"></label>
+        <button id="load-user">Charger</button>
+      </div>
+      <p id="user-info" class="muted">Charge un utilisateur.</p>
+      <p id="error" class="error" role="alert"></p>
+    </section>
+
+    <section class="card">
+      <h2>Campagnes</h2>
+      <div id="campaigns" class="stack muted">Aucune campagne chargée.</div>
+    </section>
+
+    <section class="card">
+      <h2>Personnages</h2>
+      <div id="characters" class="stack muted">Sélectionne une campagne.</div>
+    </section>
+
+    <section class="card">
+      <h2>Expéditions</h2>
+      <div id="campaign-label" class="muted compact">Sélectionne un personnage.</div>
+      <div id="expeditions" class="stack muted">Aucune expédition chargée.</div>
+    </section>
+  </aside>
+
+  <section class="workspace">
+    <section class="card context-card">
+      <div>
+        <div class="eyebrow">Contexte de jeu</div>
+        <h2 id="context-title">Aucune expédition sélectionnée</h2>
+        <div id="context-meta" class="meta">Choisis une campagne, un personnage puis une expédition.</div>
+      </div>
+      <div id="context-actions" class="actions"></div>
+    </section>
+
+    <section class="card game-panel">
+      <div class="tabs" role="tablist" aria-label="Outils d'expédition">
+        <button class="tab selected" data-tab="map" role="tab">Carte</button>
+        <button class="tab" data-tab="wiki" role="tab">Wiki</button>
+        <button class="tab" data-tab="recall" role="tab">Recall <span id="recall-badge" class="badge hidden"></span></button>
+      </div>
+
+      <div id="empty-workspace" class="empty-state">
+        <strong>Sélectionne une expédition.</strong>
+        <span>La carte, le wiki et les connaissances rappelées apparaîtront ici.</span>
+      </div>
+
+      <section id="tab-map" class="tab-panel hidden" data-panel="map">
+        <div class="panel-toolbar">
+          <div><strong>Carte d'expédition</strong><span class="muted">Fog of War basé uniquement sur la connaissance du groupe.</span></div>
+          <a id="map-open" class="button-link" href="/player.html">Ouvrir en plein écran</a>
+        </div>
+        <iframe id="map-frame" title="Carte de l'expédition" loading="lazy"></iframe>
+      </section>
+
+      <section id="tab-wiki" class="tab-panel hidden" data-panel="wiki">
+        <div class="panel-toolbar">
+          <div><strong id="wiki-title">Wiki de campagne</strong><span id="wiki-subtitle" class="muted">Sélectionne une expédition.</span></div>
+          <button id="wiki-refresh" type="button">Actualiser</button>
+        </div>
+        <div class="knowledge-layout">
+          <div id="wiki-list" class="knowledge-list"></div>
+          <article id="wiki-reader" class="knowledge-reader"><p class="muted">Sélectionne une page.</p></article>
+        </div>
+      </section>
+
+      <section id="tab-recall" class="tab-panel hidden" data-panel="recall">
+        <div class="panel-toolbar">
+          <div><strong>Knowledge Recall</strong><span id="recall-status-line" class="muted">Disponible uniquement pendant une expédition active.</span></div>
+          <button id="recall-refresh" type="button">Actualiser</button>
+        </div>
+        <div id="recall-disabled" class="notice hidden"></div>
+        <div id="recall-active" class="recall-workspace hidden">
+          <form id="recall-search-form" class="search-row">
+            <input id="recall-query" type="search" minlength="1" placeholder="Rechercher dans le wiki connu au départ…" autocomplete="off">
+            <button type="submit">Rechercher</button>
+          </form>
+          <p id="recall-message" class="muted compact"></p>
+          <div class="knowledge-layout recall-grid">
+            <div>
+              <h3>Résultats au départ</h3>
+              <div id="recall-results" class="knowledge-list"></div>
+            </div>
+            <div>
+              <h3>Pages rappelées par le groupe</h3>
+              <div id="recall-library" class="knowledge-list"></div>
+            </div>
+          </div>
+          <article id="recall-reader" class="knowledge-reader recall-reader"><p class="muted">Sélectionne une page rappelée.</p></article>
+        </div>
+      </section>
+    </section>
+  </section>
+</main>
+</body>
+</html>

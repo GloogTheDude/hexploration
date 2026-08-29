@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexploration — Expedition Map</title>
+    <link rel="stylesheet" href="/css/player.css">
+    <script type="module" src="/js/player.js"></script>
+</head>
+<body>
+<header class="topbar">
+    <div>
+        <h1>Expedition Map</h1>
+        <p id="subtitle">Carte connue du groupe — aucune information MJ non découverte.</p>
+    </div>
+    <nav>
+        <a href="/dashboard.html">Dashboard</a> <a href="/dm.html">DM</a>
+        <a href="/">Editor</a>
+        <a href="/timeline.html">Timeline</a>
+    </nav>
+</header>
+
+<main class="player-layout">
+    <aside class="panel sidebar">
+        <section>
+            <h2>Expédition</h2>
+            <label>Expedition ID
+                <input id="expedition-id" type="number" min="1" value="1">
+            </label>
+            <button id="load-btn" type="button">Charger</button>
+            <p id="error" class="error"></p>
+            <p id="bootstrap-note" class="muted small"></p>
+        </section>
+
+        <section id="expedition-info" class="info-grid muted">
+            Charge une expédition active ou positionnée.
+        </section>
+
+        <section>
+            <h2>Déplacement</h2>
+            <p id="selection-label" class="muted">Sélectionne un hex adjacent.</p>
+            <label>Durée de base (minutes)
+                <input id="base-duration" type="number" min="1" value="60">
+            </label>
+            <button id="move-btn" type="button" disabled>Déplacer l'expédition</button>
+        </section>
+
+        <section>
+            <h2>Hex sélectionné</h2>
+            <div id="hex-info" class="info-grid muted">Aucun hex sélectionné.</div>
+        </section>
+
+        <section>
+            <h2>Légende</h2>
+            <div class="legend-row"><span class="legend-swatch unknown"></span> Inconnu / destination possible</div>
+            <div class="legend-row"><span class="legend-swatch seen"></span> Vu</div>
+            <div class="legend-row"><span class="legend-swatch visited"></span> Visité</div>
+            <div class="legend-row"><span class="legend-dot"></span> Position actuelle</div>
+        </section>
+    </aside>
+
+    <section class="map-panel">
+        <canvas id="player-canvas" width="1200" height="760"></canvas>
+        <div class="map-actions">
+            <button id="fit-btn" type="button">Recentrer</button>
+            <button id="refresh-btn" type="button">Actualiser</button>
+            <span>Molette: zoom · glisser: déplacer · clic: sélectionner</span>
+        </div>
+    </section>
+
+    <aside class="panel poi-panel">
+        <h2>POI connus</h2>
+        <div id="poi-list" class="poi-list muted">Aucun POI connu.</div>
+    </aside>
+</main>
+
+<div id="toast" class="toast hidden"></div>
+</body>
+</html>
