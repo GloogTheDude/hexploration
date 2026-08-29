@@ -1,55 +1,118 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <title>Hexploration Editor</title>
-    <link rel="stylesheet" href="/css/style.css">
-    <script type="module" src="/js/app.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hexploration — Éditeur de carte</title>
+  <link rel="stylesheet" href="/css/style.css?v=302">
+  <script type="module" src="/js/app.js?v=302"></script>
 </head>
 <body>
-<a href="/dm.html" style="position:fixed;right:12px;top:12px;z-index:9999">DM Dashboard</a>
-    <header>
-        <h1>Hexploration Editor</h1>
-        <a id="editor-dm-link" href="/dm.html" style="color: white; margin-left: 16px;">DM Dashboard</a>
-        <a href="/timeline.html" style="color: white; margin-left: 16px;">Timeline</a>
-        <a href="/player.html" style="color: white; margin-left: 16px;">Player map</a>
-    </header>
-    <section id="campaign-save-panel" class="editor-campaign-panel hidden">
-      <div><strong id="editor-campaign-name">Campagne</strong><span id="editor-campaign-context">Contexte MJ</span></div>
-      <label>Nom de la carte<input id="persist-map-name" value="Carte principale" maxlength="160"></label>
-      <label>Version<input id="persist-version-name" value="Initial version" maxlength="160"></label>
-      <label>Effective à m.<input id="persist-effective-minute" type="number" min="0" value="0"></label>
-      <button id="persist-map-btn" type="button">Persister dans la campagne</button>
-      <span id="persist-map-message"></span>
-    </section>
-    <div id="canvas-section">
-        <nav id="tool-bar">
-        <a href="/dashboard.html">Dashboard</a>
-            <button id="load-map-btn">Load map</button>
-            <button id="new-map-btn">New Map</button>
-            <button id="paint-map-btn">"Paint"</button>
-            <button id="brush-btn">Brush</button>
-            <button id="bucket_btn">Bucket</button>
-            <div class="radius-slider-contener">
-                <input type="range" min="1" max="10" value="1" class="slider" id="radius-slider">
-                <span id="radius-slider-value">1</span>
-            </div>
-            <div id="terrain-buttons"></div>
-        </nav>
-        <canvas id="hex-canvas" width="1000" height="600"></canvas>
-        <div id="new-map-modal" class="modal hidden">
-            <div class="modal-content">
-                <h2>New Map</h2>
-                <label>Width</label>
-                <input id="new-map-width" type="number" value="20">
-                <label>Height</label>
-                <input id="new-map-height" type="number" value="20">
-                <label>Hex size</label>
-                <input id="new-map-hex-size" type="number" value="32">
-                <button id="confirm-new-map-btn">Create</button>
-                <button id="cancel-new-map-btn">Cancel</button>
-            </div>
-        </div>
+  <header class="editor-header">
+    <div>
+      <span class="eyebrow">HEXPLORATION</span>
+      <h1>Éditeur de carte</h1>
     </div>
+    <nav>
+      <a id="editor-dm-link" href="/dm.html">Dashboard MJ</a>
+      <a href="/timeline.html">Timeline</a>
+      <a href="/player.html">Carte joueur</a>
+    </nav>
+  </header>
+
+  <section id="campaign-save-panel" class="campaign-bar hidden">
+    <div class="campaign-context">
+      <strong id="editor-campaign-name">Campagne</strong>
+      <span id="editor-campaign-context" class="muted">Contexte MJ</span>
+    </div>
+
+    <label class="field load-field">
+      <span>Charger une carte/version</span>
+      <select id="persisted-version-select"><option value="">— Choisir —</option></select>
+    </label>
+    <button id="load-persisted-btn" type="button" class="secondary">Charger</button>
+
+    <div class="save-divider"></div>
+
+    <label class="field">
+      <span>Nom de la carte</span>
+      <input id="persist-map-name" value="Carte principale" maxlength="160">
+    </label>
+    <label class="field">
+      <span>Nom de version</span>
+      <input id="persist-version-name" value="Initial version" maxlength="160">
+    </label>
+    <label class="field compact-field">
+      <span>Effective à m.</span>
+      <input id="persist-effective-minute" type="number" min="0" value="0">
+    </label>
+
+    <div id="save-mode-wrap" class="save-mode hidden" aria-label="Mode de sauvegarde">
+      <label><input type="radio" name="save-mode" value="update" checked> Mettre à jour v<span id="update-version-number">1</span></label>
+      <label><input type="radio" name="save-mode" value="new-version"> Créer une nouvelle version</label>
+    </div>
+
+    <button id="persist-map-btn" type="button" class="primary">Persister</button>
+    <span id="persist-map-message" class="save-message"></span>
+  </section>
+
+  <main class="editor-layout">
+    <aside class="editor-sidebar">
+      <section class="tool-section">
+        <div class="section-heading"><span>Carte</span><small id="map-summary">Aucune carte chargée</small></div>
+        <div class="button-row">
+          <button id="new-map-btn" type="button" class="secondary">Nouvelle</button>
+          <button id="reload-map-btn" type="button" class="secondary">Recharger brouillon</button>
+        </div>
+      </section>
+
+      <section class="tool-section">
+        <div class="section-heading"><span>Navigation</span><small>Comme le workbench POI</small></div>
+        <div class="nav-grid">
+          <button id="zoom-out-btn" type="button" class="icon-btn" title="Dézoomer">−</button>
+          <button id="fit-map-btn" type="button" class="secondary">Ajuster</button>
+          <button id="zoom-in-btn" type="button" class="icon-btn" title="Zoomer">+</button>
+        </div>
+        <p class="help">Molette : zoom · Espace + glisser : déplacer temporairement, même avec le pinceau actif.</p>
+      </section>
+
+      <section class="tool-section">
+        <div class="section-heading"><span>Outil</span><small id="brush-status">Pinceau désactivé</small></div>
+        <button id="brush-btn" type="button" class="brush-btn">Activer le pinceau</button>
+        <label class="range-field">
+          <span>Rayon <b id="radius-slider-value">1</b></span>
+          <input type="range" min="1" max="10" value="1" id="radius-slider">
+        </label>
+      </section>
+
+      <section class="tool-section terrain-section">
+        <div class="section-heading"><span>Terrain</span><small id="selected-terrain-label">Aucun sélectionné</small></div>
+        <div id="terrain-buttons" class="terrain-list"></div>
+      </section>
+    </aside>
+
+    <section class="canvas-panel">
+      <div class="canvas-toolbar">
+        <div><strong>Zone de dessin</strong><span id="canvas-hint" class="muted">Molette : zoom · Espace + glisser : déplacer.</span></div>
+        <span id="zoom-label" class="zoom-label">100%</span>
+      </div>
+      <div id="canvas-wrap" class="canvas-wrap">
+        <canvas id="hex-canvas" width="1200" height="760"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <div id="new-map-modal" class="modal hidden">
+    <form id="new-map-form" class="modal-content">
+      <div class="modal-head"><div><span class="eyebrow">NOUVEAU BROUILLON</span><h2>Créer une carte</h2></div><button id="cancel-new-map-btn" type="button" class="secondary">Fermer</button></div>
+      <div class="form-grid">
+        <label>Largeur<input id="new-map-width" type="number" min="1" max="10000" value="20" required></label>
+        <label>Hauteur<input id="new-map-height" type="number" min="1" max="10000" value="20" required></label>
+        <label>Taille d'hex<input id="new-map-hex-size" type="number" min="8" max="96" value="32" required></label>
+      </div>
+      <p class="muted">Jusqu’à 10 000×10 000 hex logiques. Les grandes cartes sont stockées de façon sparse : seules les cases modifiées sont matérialisées.</p>
+      <button id="confirm-new-map-btn" type="submit" class="primary">Créer le brouillon</button>
+    </form>
+  </div>
 </body>
 </html>

@@ -106,7 +106,7 @@ function screenToHex(x, y) {
 function hexPath(x, y, size) {
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
-        const angle = Math.PI / 180 * (60 * i - 30);
+        const angle = Math.PI / 180 * (60 * i);
         const px = x + size * Math.cos(angle);
         const py = y + size * Math.sin(angle);
         if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);

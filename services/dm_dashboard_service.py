@@ -20,6 +20,9 @@ from db.models import (
     PointOfInterest,
     WorldEvent,
     WorldMap,
+    Movement,
+    CharacterMapHexObservation,
+    CharacterKnowledgeObservation,
     User,
 )
 from dto.dm_dashboard_dto import (
@@ -207,6 +210,20 @@ class DMDashboardService:
         return MapPersistenceService(self.db).snapshot_new_version_from_editor(
             map_id=map_id,
             parent_version_id=data.parent_version_id,
+            version_name=data.version_name,
+            effective_from_game_minute=data.effective_from_game_minute,
+        )
+
+    def update_map_version_from_editor(self, campaign_id: int, user_id: int, map_id: int, map_version_id: int, data):
+        from services.map_persistence_service import MapPersistenceService
+        self._require_dm(campaign_id, user_id)
+        world_map, version = self._require_map_version(campaign_id, map_version_id)
+        if world_map.id != map_id:
+            raise NotFoundError("Map version not found")
+        return MapPersistenceService(self.db).update_version_from_editor(
+            map_id=map_id,
+            map_version_id=version.id,
+            map_name=data.map_name,
             version_name=data.version_name,
             effective_from_game_minute=data.effective_from_game_minute,
         )
@@ -523,7 +540,7 @@ class DMDashboardService:
                             height=version.height,
                             hex_size=version.hex_size,
                             effective_from_game_minute=version.effective_from_game_minute,
-                            hex_count=hex_counts.get(version.id, 0),
+                            hex_count=(version.width * version.height if version.default_terrain_key else hex_counts.get(version.id, 0)),
                             poi_count=poi_counts.get(version.id, 0),
                             edge_count=edge_counts.get(version.id, 0),
                         )
@@ -546,6 +563,37 @@ class DMDashboardService:
                 for event in recent_events
             ],
         )
+
+    def delete_map(self, campaign_id: int, user_id: int, map_id: int) -> None:
+        self._require_dm(campaign_id, user_id)
+        world_map = self.db.get(WorldMap, map_id)
+        if world_map is None:
+            raise NotFoundError("Map not found")
+        if world_map.campaign_id != campaign_id:
+            raise ForbiddenOperationError("Map does not belong to this campaign")
+
+        version_ids = list(self.db.scalars(select(MapVersion.id).where(MapVersion.map_id == map_id)))
+        if version_ids:
+            if self.db.scalar(select(Expedition.id).where(Expedition.current_map_version_id.in_(version_ids)).limit(1)) is not None:
+                raise ConflictError("Cannot delete this map: a campaign expedition references one of its versions")
+            if self.db.scalar(select(Movement.id).where(Movement.map_version_id.in_(version_ids)).limit(1)) is not None:
+                raise ConflictError("Cannot delete this map: movement history references one of its versions")
+            if self.db.scalar(select(CharacterMapHexObservation.id).where(CharacterMapHexObservation.map_version_id.in_(version_ids)).limit(1)) is not None:
+                raise ConflictError("Cannot delete this map: player map knowledge references one of its versions")
+
+        features = list(self.db.scalars(select(MapFeature).where(MapFeature.map_id == map_id)))
+        if features:
+            conditions = []
+            from sqlalchemy import and_, or_
+            for feature in features:
+                conditions.append(and_(WorldEvent.target_type == feature.feature_type, WorldEvent.target_id == feature.feature_id))
+            if conditions and self.db.scalar(select(WorldEvent.id).where(WorldEvent.campaign_id == campaign_id, or_(*conditions)).limit(1)) is not None:
+                raise ConflictError("Cannot delete this map: world-event history references one of its features")
+            if conditions and self.db.scalar(select(CharacterKnowledgeObservation.id).where(or_(*conditions)).limit(1)) is not None:
+                raise ConflictError("Cannot delete this map: character knowledge references one of its features")
+
+        self.db.delete(world_map)
+        self.db.commit()
 
     def _require_map_version(self, campaign_id: int, map_version_id: int) -> tuple[WorldMap, MapVersion]:
         version = self.db.get(MapVersion, map_version_id)
@@ -585,7 +633,10 @@ class DMDashboardService:
             version=version.version,
             version_name=version.name,
             effective_from_game_minute=version.effective_from_game_minute,
+            width=version.width,
+            height=version.height,
             hex_size=version.hex_size,
+            default_terrain_key=version.default_terrain_key,
             hexes=[DMMapHexWorkbench(id=h.id, q=h.q, r=h.r, terrain_key=h.terrain_key, elevation=h.elevation, visibility_score=h.visibility_score, travel_cost=h.travel_cost, extra_data=h.extra_data or {}) for h in hexes],
             pois=[DMPOIWorkbench(id=poi.id, feature_id=poi.feature_id, hex_id=h.id, q=h.q, r=h.r, name=poi.name, kind=poi.kind, dm_description=poi.dm_description, is_landmark=poi.is_landmark) for poi, h in pois],
             edges=[DMEdgeWorkbench(id=e.id, from_q=e.from_q, from_r=e.from_r, to_q=e.to_q, to_r=e.to_r, feature_type=e.feature_type, feature_id=e.feature_id, name=e.name, extra_data=e.extra_data or {}) for e in edges],
@@ -595,9 +646,24 @@ class DMDashboardService:
         self._require_dm(campaign_id, user_id)
         self._require_map_version(campaign_id, map_version_id)
         map_hex = self.db.scalar(select(MapHex).where(MapHex.map_version_id == map_version_id, MapHex.q == data.q, MapHex.r == data.r))
+        world_map, version = self._require_map_version(campaign_id, map_version_id)
+        if map_hex is None and version.default_terrain_key:
+            from models.hexmap import Hexmap
+            from models.constants import BASE_TERRAINS
+            col, row = Hexmap.axial_to_offset(data.q, data.r, version.width, version.height)
+            if not (0 <= col < version.width and 0 <= row < version.height):
+                raise NotFoundError("Map hex not found")
+            terrain = BASE_TERRAINS[version.default_terrain_key]
+            map_hex = MapHex(
+                map_version_id=version.id, q=data.q, r=data.r,
+                terrain_key=version.default_terrain_key,
+                elevation=terrain.elevation, visibility_score=terrain.visibility_score,
+                travel_cost=terrain.travel_cost, extra_data={},
+            )
+            self.db.add(map_hex)
+            self.db.flush()
         if map_hex is None:
             raise NotFoundError("Map hex not found")
-        world_map, _ = self._require_map_version(campaign_id, map_version_id)
         identity = MapFeatureService(self.db).allocate(
             campaign_id=campaign_id, map_id=world_map.id, feature_type="POI"
         )

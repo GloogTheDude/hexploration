@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from fastapi.responses import Response
 
 from db.session import get_db
 from dto.dm_dashboard_dto import (
@@ -18,6 +19,7 @@ from dto.dm_dashboard_dto import (
     DMCharacterCreate,
     DMEditorMapCreate,
     DMEditorMapVersionCreate,
+    DMEditorMapVersionUpdate,
     DMEditorLoadResponse,
 )
 from dto.expedition_dto import ExpeditionResponse
@@ -28,6 +30,7 @@ from dto.map_edge_dto import MapEdgeResponse
 from dto.world_event_dto import WorldEventResponse
 from services.dm_dashboard_service import DMDashboardService
 from services.map_persistence_service import MapPersistenceError
+from services.map_export_service import MapExportService
 from services.errors import ConflictError, ForbiddenOperationError, NotFoundError
 
 
@@ -77,6 +80,44 @@ def delete_dm_campaign(
     except (NotFoundError, ForbiddenOperationError) as exc:
         _raise_http(exc)
     return None
+
+
+@router.delete("/api/campaigns/{campaign_id}/dm-maps/{map_id}", status_code=204)
+def delete_dm_map(
+    campaign_id: int,
+    map_id: int,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        DMDashboardService(db).delete_map(campaign_id, user_id, map_id)
+    except (NotFoundError, ForbiddenOperationError, ConflictError) as exc:
+        _raise_http(exc)
+    return None
+
+
+@router.get("/api/campaigns/{campaign_id}/dm-map-versions/{map_version_id}/export")
+def export_dm_map_version(
+    campaign_id: int,
+    map_version_id: int,
+    format: str = Query(default="png"),
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        DMDashboardService(db)._require_dm(campaign_id, user_id)
+        world_map, _ = DMDashboardService(db)._require_map_version(campaign_id, map_version_id)
+        payload, media_type, filename = MapExportService(db).render(map_version_id, format)
+        return Response(
+            content=payload,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-store",
+            },
+        )
+    except (NotFoundError, ForbiddenOperationError, ValueError) as exc:
+        _raise_http(exc)
 
 
 @router.get("/api/campaigns/{campaign_id}/dm-dashboard", response_model=DMDashboardResponse)
@@ -247,6 +288,35 @@ def dm_snapshot_new_map_version(
     try:
         world_map, version, hex_count, _poi_count, _edge_count = DMDashboardService(db).snapshot_new_map_version(
             campaign_id, user_id, map_id, data
+        )
+        return MapSnapshotResponse(
+            map_id=world_map.id,
+            map_version_id=version.id,
+            version=version.version,
+            width=version.width,
+            height=version.height,
+            hex_size=version.hex_size,
+            hex_count=hex_count,
+        )
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError, MapPersistenceError) as exc:
+        _raise_http(exc)
+
+
+@router.patch(
+    "/api/campaigns/{campaign_id}/dm-maps/{map_id}/versions/{map_version_id}/from-editor",
+    response_model=MapSnapshotResponse,
+)
+def dm_update_map_version_from_editor(
+    campaign_id: int,
+    map_id: int,
+    map_version_id: int,
+    data: DMEditorMapVersionUpdate,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        world_map, version, hex_count = DMDashboardService(db).update_map_version_from_editor(
+            campaign_id, user_id, map_id, map_version_id, data
         )
         return MapSnapshotResponse(
             map_id=world_map.id,

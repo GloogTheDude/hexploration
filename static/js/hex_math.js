@@ -1,13 +1,15 @@
 export function axialToPixel(q, r, size) {
+    // Flat-top axial projection: horizontal top/bottom edges.
     return {
-        x: size * Math.sqrt(3) * (q + r / 2),
-        y: size * 1.5 * r
+        x: size * 1.5 * q,
+        y: size * Math.sqrt(3) * (r + q / 2)
     };
 }
 
 export function pixelToAxial(x, y, size) {
-    const q = ((Math.sqrt(3) / 3) * x - y / 3) / size;
-    const r = ((2 / 3) * y) / size;
+    // Inverse of the flat-top projection above.
+    const q = ((2 / 3) * x) / size;
+    const r = ((-1 / 3) * x + (Math.sqrt(3) / 3) * y) / size;
     return axialRound(q, r);
 }
 

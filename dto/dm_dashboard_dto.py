@@ -41,6 +41,12 @@ class DMEditorMapVersionCreate(BaseModel):
     effective_from_game_minute: int = Field(ge=0)
 
 
+class DMEditorMapVersionUpdate(BaseModel):
+    map_name: str | None = Field(default=None, min_length=1, max_length=160)
+    version_name: str | None = Field(default=None, max_length=160)
+    effective_from_game_minute: int = Field(ge=0)
+
+
 class DMEditorLoadResponse(BaseModel):
     map_id: int
     map_version_id: int
@@ -213,7 +219,10 @@ class DMMapWorkbenchResponse(BaseModel):
     version: int
     version_name: str | None
     effective_from_game_minute: int
+    width: int
+    height: int
     hex_size: int
+    default_terrain_key: str | None = None
     hexes: list[DMMapHexWorkbench]
     pois: list[DMPOIWorkbench]
     edges: list[DMEdgeWorkbench]

@@ -220,6 +220,9 @@ class MapVersion(Base):
     width: Mapped[int] = mapped_column(Integer())
     height: Mapped[int] = mapped_column(Integer())
     hex_size: Mapped[int] = mapped_column(Integer(), default=32)
+    # Non-null means sparse storage: absent MapHex rows inherit this terrain.
+    # NULL keeps pre-v30 dense versions backward compatible.
+    default_terrain_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
     effective_from_game_minute: Mapped[int] = mapped_column(BigInteger(), default=0, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 

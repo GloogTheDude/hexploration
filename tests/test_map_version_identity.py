@@ -88,3 +88,85 @@ def test_dm_can_load_persisted_version_into_editor(db: Session, campaign):
     assert map_routes.hexmap.get_hex(0, 0).terrain.elevation == 1
     assert map_routes.hexmap.get_hex(0, 0).terrain.visibility_score == 2
     assert map_routes.hexmap.get_hex(0, 0).terrain.travel_cost == 1.5
+
+
+def test_unused_leaf_map_version_can_be_updated_in_place(db: Session, campaign):
+    world_map, v1, poi, edge = seed_version(db, campaign)
+    import routes.map_routes as map_routes
+    map_routes.hexmap = Hexmap(2, 1, 32)
+    map_routes.hexmap.get_hex(-1, 0).terrain = BASE_TERRAINS["HILL"]
+    map_routes.hexmap.get_hex(0, 0).terrain = BASE_TERRAINS["FOREST"]
+
+    _, updated, count = MapPersistenceService(db).update_version_from_editor(
+        map_id=world_map.id,
+        map_version_id=v1.id,
+        map_name="Updated map",
+        version_name="edited v1",
+        effective_from_game_minute=0,
+    )
+
+    rows = list(db.scalars(select(MapHex).where(MapHex.map_version_id == v1.id)))
+    poi_after = db.get(PointOfInterest, poi.id)
+    edge_after = db.get(MapEdge, edge.id)
+    assert updated.id == v1.id
+    assert updated.version == 1
+    assert updated.name == "edited v1"
+    assert world_map.name == "Updated map"
+    assert count == 2
+    assert {row.terrain_key for row in rows} == {"HILL", "FOREST"}
+    assert poi_after is not None and poi_after.feature_id == 5
+    assert edge_after is not None and edge_after.feature_id == 17
+
+
+def test_map_version_with_child_is_immutable_in_place(db: Session, campaign):
+    from services.errors import ConflictError
+
+    world_map, v1, _, _ = seed_version(db, campaign)
+    v2 = MapVersion(
+        map_id=world_map.id,
+        parent_version_id=v1.id,
+        version=2,
+        name="v2",
+        width=2,
+        height=1,
+        hex_size=32,
+        effective_from_game_minute=10,
+    )
+    db.add(v2)
+    db.commit()
+    import routes.map_routes as map_routes
+    map_routes.hexmap = Hexmap(2, 1, 32)
+
+    import pytest
+    with pytest.raises(ConflictError, match="create a new version"):
+        MapPersistenceService(db).update_version_from_editor(
+            map_id=world_map.id,
+            map_version_id=v1.id,
+            map_name=world_map.name,
+            version_name=v1.name,
+            effective_from_game_minute=0,
+        )
+
+
+def test_tracked_editor_update_only_persists_dirty_hexes(db: Session, campaign):
+    world_map, v1, _, _ = seed_version(db, campaign)
+    service = MapPersistenceService(db)
+    service.load_version_into_editor(v1.id)
+
+    import routes.map_routes as map_routes
+    target = map_routes.hexmap.get_hex(-1, 0)
+    target.terrain = BASE_TERRAINS["HILL"]
+    map_routes.dirty_hex_coords.add((-1, 0))
+
+    service.update_version_from_editor(
+        map_id=world_map.id,
+        map_version_id=v1.id,
+        map_name=world_map.name,
+        version_name=v1.name,
+        effective_from_game_minute=0,
+    )
+
+    rows = {(row.q, row.r): row for row in db.scalars(select(MapHex).where(MapHex.map_version_id == v1.id))}
+    assert rows[(-1, 0)].terrain_key == "HILL"
+    assert rows[(0, 0)].terrain_key == "FOREST"
+    assert map_routes.dirty_hex_coords == set()

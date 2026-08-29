@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
 
 from routes.map_routes import router as map_router
 from routes.health_routes import router as health_router
@@ -26,8 +27,9 @@ from routes.invitation_routes import router as invitation_router
 
 app = FastAPI(
     title="Hexploration",
-    version="0.26.0-character-sheets",
+    version="0.30.2-editor-navigation",
 )
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 
 app.include_router(map_router)
 app.include_router(health_router)

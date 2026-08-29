@@ -768,3 +768,43 @@ GET  /api/characters/{character_id}/sheet-data/current?user_id=...
 GET  /api/characters/{character_id}/sheet-data/current/pdf?user_id=...
 GET  /api/characters/{character_id}/sheet-data/{version}/pdf?user_id=...
 ```
+
+### v29.1 editor hotfix
+The map editor ES module graph is cache-busted consistently (`?v=291`) so browsers cannot mix the new editor entrypoint with stale pre-v29 dependencies. This fixes the blank canvas / empty terrain palette / dead controls symptom after upgrading from an older version.
+
+## Large-map editor performance (v29.5)
+
+The terrain editor supports sparse maps up to 10,000×10,000 logical hexes (100,000,000 logical cells) without materializing the full grid.
+Painting is applied immediately in the browser and synchronized to the backend in short deduplicated batches. Canvas redraws are scheduled with `requestAnimationFrame`, rectangular maps are viewport-culled, and very distant zoom levels use a coarse preview rather than drawing every polygon.
+
+Map persistence no longer flushes one SQLAlchemy row at a time. New versions are inserted in batches, while updates to a loaded unused version write only the dirty painted coordinates. Large JSON map responses are gzip-compressed by the ASGI app.
+
+Large maps use sparse storage: only modified/supporting cells are materialized, while the untouched background remains implicit.
+
+## Large-map storage (v30)
+
+New map versions use sparse terrain storage. A map can be up to `10,000 x 10,000`
+logical hexes without allocating 100 million Python objects or database rows.
+`MapVersion.default_terrain_key` defines the implicit terrain (currently `SEA`)
+and `MapHex` rows materialize only edited/supporting cells. The editor and DM
+workbench render only the visible viewport and use a coarse overview at world
+zoom. Legacy dense map versions remain loadable.
+
+After upgrading an existing database run:
+
+```bash
+alembic upgrade head
+```
+
+
+### v30.1 — navigation éditeur
+
+- Les cartes s'ouvrent désormais à **100 % (1 pixel monde = 1 pixel CSS)** au lieu d'être automatiquement ajustées au viewport.
+- Le bouton **Ajuster** conserve la vue complète de la carte à la demande.
+- Maintenir **Espace** active temporairement le déplacement du viewport, même si le pinceau est actif ; relâcher Espace restaure immédiatement le pinceau.
+- Le raccourci Espace n'intercepte pas la saisie dans les champs de formulaire.
+
+
+### v30.2 — brush hot-path optimization
+
+Brush strokes are rendered locally per touched hex instead of forcing a full viewport redraw on every pointer event. Server synchronization is deferred until the stroke ends (with a safety batch threshold), making brush latency independent of total map dimensions in normal editing.
