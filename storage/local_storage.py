@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
@@ -56,6 +57,32 @@ class LocalFileStorage:
             storage_key=storage_key,
             checksum_sha256=digest.hexdigest(),
         )
+
+
+    def save_character_sheet_path(
+        self,
+        character_id: int,
+        version: int,
+        source: str | Path,
+    ) -> StoredFile:
+        """Copy an existing PDF into versioned character-sheet storage."""
+        source_path = Path(source)
+        if not source_path.is_file():
+            raise FileNotFoundError(source_path)
+
+        relative_dir = Path("characters") / str(character_id) / "sheets"
+        relative_name = f"v{version}-{uuid4().hex}.pdf"
+        storage_key = (relative_dir / relative_name).as_posix()
+        destination = self._resolve_key(storage_key)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
+        digest = hashlib.sha256()
+        with source_path.open("rb") as src, destination.open("wb") as dst:
+            while chunk := src.read(1024 * 1024):
+                digest.update(chunk)
+                dst.write(chunk)
+
+        return StoredFile(storage_key=storage_key, checksum_sha256=digest.hexdigest())
 
     def path_for(self, storage_key: str) -> Path:
         path = self._resolve_key(storage_key)

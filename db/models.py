@@ -53,6 +53,8 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     memberships: Mapped[list[CampaignMembership]] = relationship(back_populates="user")
+    received_campaign_invitations: Mapped[list[CampaignInvitation]] = relationship(foreign_keys="CampaignInvitation.invited_user_id", back_populates="invited_user")
+    sent_campaign_invitations: Mapped[list[CampaignInvitation]] = relationship(foreign_keys="CampaignInvitation.invited_by_user_id", back_populates="invited_by_user")
     characters: Mapped[list[Character]] = relationship(back_populates="owner")
 
 
@@ -66,6 +68,7 @@ class Campaign(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     memberships: Mapped[list[CampaignMembership]] = relationship(back_populates="campaign", cascade="all, delete-orphan")
+    invitations: Mapped[list[CampaignInvitation]] = relationship(back_populates="campaign", cascade="all, delete-orphan")
     characters: Mapped[list[Character]] = relationship(back_populates="campaign", cascade="all, delete-orphan")
     maps: Mapped[list[WorldMap]] = relationship(back_populates="campaign", cascade="all, delete-orphan")
     expeditions: Mapped[list[Expedition]] = relationship(back_populates="campaign", cascade="all, delete-orphan")
@@ -83,6 +86,25 @@ class CampaignMembership(Base):
 
     campaign: Mapped[Campaign] = relationship(back_populates="memberships")
     user: Mapped[User] = relationship(back_populates="memberships")
+
+
+class CampaignInvitation(Base):
+    __tablename__ = "campaign_invitations"
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "invited_user_id", name="uq_campaign_invitation_user"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id", ondelete="CASCADE"), index=True)
+    invited_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    invited_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="PENDING", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    campaign: Mapped[Campaign] = relationship(back_populates="invitations")
+    invited_user: Mapped[User] = relationship(foreign_keys=[invited_user_id], back_populates="received_campaign_invitations")
+    invited_by_user: Mapped[User] = relationship(foreign_keys=[invited_by_user_id], back_populates="sent_campaign_invitations")
 
 
 class Character(Base):
@@ -103,6 +125,22 @@ class Character(Base):
     campaign: Mapped[Campaign] = relationship(back_populates="characters")
     owner: Mapped[User] = relationship(back_populates="characters")
     sheets: Mapped[list[CharacterSheetVersion]] = relationship(back_populates="character", cascade="all, delete-orphan")
+    sheet_data_versions: Mapped[list[CharacterSheetDataVersion]] = relationship(back_populates="character", cascade="all, delete-orphan")
+
+
+class CharacterSheetDataVersion(Base):
+    __tablename__ = "character_sheet_data_versions"
+    __table_args__ = (UniqueConstraint("character_id", "version", name="uq_character_sheet_data_version"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    character_id: Mapped[int] = mapped_column(ForeignKey("characters.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer())
+    data: Mapped[dict] = mapped_column(JSON())
+    campaign_game_minute: Mapped[int] = mapped_column(BigInteger(), default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    is_current: Mapped[bool] = mapped_column(Boolean(), default=True)
+
+    character: Mapped[Character] = relationship(back_populates="sheet_data_versions")
 
 
 class CharacterSheetVersion(Base):

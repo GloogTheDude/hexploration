@@ -10,17 +10,11 @@ from sqlalchemy.orm import Session
 from db.models import CharacterSheetVersion
 from db.session import get_db
 from services.character_sheet_service import (
-    CharacterNotFoundError,
-    CharacterSheetService,
-    InvalidCharacterSheetError,
-    SheetNotFoundError,
+    CharacterNotFoundError, CharacterSheetForbiddenError, CharacterSheetService,
+    CharacterSheetTemplateError, InvalidCharacterSheetError, SheetNotFoundError,
 )
 
-
-router = APIRouter(
-    prefix="/api/characters/{character_id}/sheets",
-    tags=["character sheets"],
-)
+router = APIRouter(prefix="/api/characters/{character_id}/sheets", tags=["character sheets"])
 
 
 class CharacterSheetResponse(BaseModel):
@@ -37,123 +31,74 @@ class CharacterSheetResponse(BaseModel):
 
     @classmethod
     def from_model(cls, sheet: CharacterSheetVersion) -> "CharacterSheetResponse":
-        return cls(
-            id=sheet.id,
-            character_id=sheet.character_id,
-            version=sheet.version,
-            original_filename=sheet.original_filename,
-            mime_type=sheet.mime_type,
-            checksum_sha256=sheet.checksum_sha256,
-            campaign_game_minute=sheet.campaign_game_minute,
-            expedition_id=sheet.expedition_id,
-            created_at=sheet.created_at,
-            is_current=sheet.is_current,
-        )
+        return cls(id=sheet.id, character_id=sheet.character_id, version=sheet.version,
+                   original_filename=sheet.original_filename, mime_type=sheet.mime_type,
+                   checksum_sha256=sheet.checksum_sha256, campaign_game_minute=sheet.campaign_game_minute,
+                   expedition_id=sheet.expedition_id, created_at=sheet.created_at, is_current=sheet.is_current)
 
 
-def _service(db: Session) -> CharacterSheetService:
-    return CharacterSheetService(db)
+def _errors(exc: Exception) -> HTTPException:
+    if isinstance(exc, CharacterNotFoundError): return HTTPException(404, "Character not found")
+    if isinstance(exc, CharacterSheetForbiddenError): return HTTPException(403, str(exc))
+    if isinstance(exc, SheetNotFoundError): return HTTPException(404, "Character sheet not found")
+    if isinstance(exc, InvalidCharacterSheetError): return HTTPException(415, str(exc))
+    if isinstance(exc, CharacterSheetTemplateError): return HTTPException(503, str(exc))
+    return HTTPException(500, "Character sheet error")
 
 
-@router.post(
-    "",
-    response_model=CharacterSheetResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def upload_character_sheet(
-    character_id: int,
-    file: UploadFile = File(...),
-    campaign_game_minute: int | None = Form(default=None),
-    expedition_id: int | None = Form(default=None),
-    db: Session = Depends(get_db),
-) -> CharacterSheetResponse:
-    service = _service(db)
-
+@router.post("/template", response_model=CharacterSheetResponse, status_code=status.HTTP_201_CREATED)
+def create_blank_character_sheet(character_id: int, user_id: int, db: Session = Depends(get_db)) -> CharacterSheetResponse:
     try:
-        sheet = await service.upload(
-            character_id=character_id,
-            file=file,
-            campaign_game_minute=campaign_game_minute,
-            expedition_id=expedition_id,
-        )
-    except CharacterNotFoundError:
-        raise HTTPException(status_code=404, detail="Character not found")
-    except InvalidCharacterSheetError as exc:
-        raise HTTPException(status_code=415, detail=str(exc))
+        return CharacterSheetResponse.from_model(CharacterSheetService(db).create_from_template(character_id, user_id))
+    except (CharacterNotFoundError, CharacterSheetForbiddenError, CharacterSheetTemplateError) as exc:
+        raise _errors(exc)
 
-    return CharacterSheetResponse.from_model(sheet)
+
+@router.post("", response_model=CharacterSheetResponse, status_code=status.HTTP_201_CREATED)
+async def upload_character_sheet(character_id: int, user_id: int, file: UploadFile = File(...),
+                                 campaign_game_minute: int | None = Form(default=None),
+                                 expedition_id: int | None = Form(default=None),
+                                 db: Session = Depends(get_db)) -> CharacterSheetResponse:
+    try:
+        sheet = await CharacterSheetService(db).upload(character_id, file, campaign_game_minute, expedition_id, user_id=user_id)
+        return CharacterSheetResponse.from_model(sheet)
+    except (CharacterNotFoundError, CharacterSheetForbiddenError, InvalidCharacterSheetError) as exc:
+        raise _errors(exc)
 
 
 @router.get("", response_model=list[CharacterSheetResponse])
-def list_character_sheets(
-    character_id: int,
-    db: Session = Depends(get_db),
-) -> list[CharacterSheetResponse]:
-    service = _service(db)
-
+def list_character_sheets(character_id: int, user_id: int, db: Session = Depends(get_db)) -> list[CharacterSheetResponse]:
     try:
-        sheets = service.history(character_id)
-    except CharacterNotFoundError:
-        raise HTTPException(status_code=404, detail="Character not found")
-
-    return [CharacterSheetResponse.from_model(sheet) for sheet in sheets]
+        return [CharacterSheetResponse.from_model(s) for s in CharacterSheetService(db).history(character_id, user_id)]
+    except (CharacterNotFoundError, CharacterSheetForbiddenError) as exc:
+        raise _errors(exc)
 
 
 @router.get("/current", response_model=CharacterSheetResponse)
-def get_current_character_sheet_metadata(
-    character_id: int,
-    db: Session = Depends(get_db),
-) -> CharacterSheetResponse:
-    service = _service(db)
-
+def get_current_character_sheet_metadata(character_id: int, user_id: int, db: Session = Depends(get_db)) -> CharacterSheetResponse:
     try:
-        sheet = service.current(character_id)
-    except CharacterNotFoundError:
-        raise HTTPException(status_code=404, detail="Character not found")
-    except SheetNotFoundError:
-        raise HTTPException(status_code=404, detail="No character sheet found")
-
-    return CharacterSheetResponse.from_model(sheet)
+        return CharacterSheetResponse.from_model(CharacterSheetService(db).current(character_id, user_id))
+    except (CharacterNotFoundError, CharacterSheetForbiddenError, SheetNotFoundError) as exc:
+        raise _errors(exc)
 
 
 @router.get("/current/pdf", response_class=FileResponse)
-def open_current_character_sheet(
-    character_id: int,
-    db: Session = Depends(get_db),
-) -> FileResponse:
-    service = _service(db)
-
+def open_current_character_sheet(character_id: int, user_id: int, db: Session = Depends(get_db)) -> FileResponse:
+    service = CharacterSheetService(db)
     try:
-        sheet = service.current(character_id)
+        sheet = service.current(character_id, user_id)
         path = service.path_for(sheet)
-    except CharacterNotFoundError:
-        raise HTTPException(status_code=404, detail="Character not found")
-    except SheetNotFoundError:
-        raise HTTPException(status_code=404, detail="Character sheet not found")
-
-    return FileResponse(
-        path=path,
-        media_type="application/pdf",
-        headers={"Content-Disposition": "inline"},
-    )
+    except (CharacterNotFoundError, CharacterSheetForbiddenError, SheetNotFoundError) as exc:
+        raise _errors(exc)
+    return FileResponse(path=path, media_type="application/pdf", headers={"Content-Disposition": "inline"})
 
 
 @router.get("/{version}/pdf", response_class=FileResponse)
-def open_character_sheet_version(
-    character_id: int,
-    version: int,
-    db: Session = Depends(get_db),
-) -> FileResponse:
-    service = _service(db)
-
+def open_character_sheet_version(character_id: int, version: int, user_id: int, db: Session = Depends(get_db)) -> FileResponse:
+    service = CharacterSheetService(db)
     try:
-        sheet = service.version(character_id, version)
+        sheet = service.version(character_id, version, user_id)
         path = service.path_for(sheet)
-    except SheetNotFoundError:
-        raise HTTPException(status_code=404, detail="Character sheet version not found")
-
-    return FileResponse(
-        path=path,
-        media_type="application/pdf",
-        headers={"Content-Disposition": "inline"},
-    )
+    except (CharacterNotFoundError, CharacterSheetForbiddenError, SheetNotFoundError) as exc:
+        raise _errors(exc)
+    return FileResponse(path=path, media_type="application/pdf", headers={"Content-Disposition": "inline"})

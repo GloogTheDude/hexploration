@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from db.session import get_db
 from dto.dm_dashboard_dto import (
     DMCampaignSummary,
+    DMCampaignUpdate,
     DMDashboardResponse,
     DMExpeditionPlanCreate,
     DMExpeditionPlanResponse,
@@ -48,6 +49,34 @@ def _raise_http(exc: Exception) -> None:
 @router.get("/api/users/{user_id}/dm-campaigns", response_model=list[DMCampaignSummary])
 def list_dm_campaigns(user_id: int, db: Session = Depends(get_db)):
     return DMDashboardService(db).list_dm_campaigns(user_id)
+
+
+
+
+@router.patch("/api/campaigns/{campaign_id}/dm-settings", response_model=DMCampaignSummary)
+def update_dm_campaign(
+    campaign_id: int,
+    data: DMCampaignUpdate,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        return DMDashboardService(db).update_campaign(campaign_id, user_id, data)
+    except (NotFoundError, ForbiddenOperationError, ValueError) as exc:
+        _raise_http(exc)
+
+
+@router.delete("/api/campaigns/{campaign_id}/dm-settings", status_code=204)
+def delete_dm_campaign(
+    campaign_id: int,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        DMDashboardService(db).delete_campaign(campaign_id, user_id)
+    except (NotFoundError, ForbiddenOperationError) as exc:
+        _raise_http(exc)
+    return None
 
 
 @router.get("/api/campaigns/{campaign_id}/dm-dashboard", response_model=DMDashboardResponse)

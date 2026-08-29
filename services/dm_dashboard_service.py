@@ -8,6 +8,7 @@ from db.models import (
     CampaignMembership,
     CampaignRole,
     Character,
+    CharacterSheetDataVersion,
     CharacterStatus,
     Expedition,
     ExpeditionCharacter,
@@ -23,6 +24,7 @@ from db.models import (
 )
 from dto.dm_dashboard_dto import (
     DMCampaignSummary,
+    DMCampaignUpdate,
     DMMemberSummary,
     DMCharacterSummary,
     DMDashboardResponse,
@@ -62,6 +64,27 @@ class DMDashboardService:
             raise ForbiddenOperationError("DM membership required for this campaign")
         return campaign, membership
 
+    def _character_summary(self, character: Character) -> DMCharacterSummary:
+        sheet = self.db.scalar(
+            select(CharacterSheetDataVersion)
+            .where(
+                CharacterSheetDataVersion.character_id == character.id,
+                CharacterSheetDataVersion.is_current.is_(True),
+            )
+            .order_by(CharacterSheetDataVersion.version.desc())
+        )
+        data = dict(sheet.data) if sheet else None
+        return DMCharacterSummary(
+            id=character.id, owner_user_id=character.owner_user_id, name=character.name,
+            race=character.race, character_class=character.character_class, level=character.level,
+            status=character.status, current_game_minute=character.current_game_minute,
+            current_hp=data.get("current_hp") if data else None,
+            max_hp=data.get("max_hp") if data else None,
+            armor_class=data.get("armor_class") if data else None,
+            passive_perception=data.get("passive_perception") if data else None,
+            sheet_version=sheet.version if sheet else None, sheet_data=data,
+        )
+
     def list_dm_campaigns(self, user_id: int) -> list[DMCampaignSummary]:
         rows = self.db.execute(
             select(Campaign, CampaignMembership)
@@ -82,6 +105,36 @@ class DMDashboardService:
             )
             for campaign, membership in rows
         ]
+
+
+    def update_campaign(self, campaign_id: int, user_id: int, data: DMCampaignUpdate) -> DMCampaignSummary:
+        campaign, membership = self._require_dm(campaign_id, user_id)
+        changes = data.model_dump(exclude_unset=True)
+        if not changes:
+            raise ValueError("At least one campaign field must be provided")
+
+        if "name" in changes:
+            campaign.name = changes["name"].strip()
+        if "epoch_name" in changes:
+            campaign.epoch_name = changes["epoch_name"].strip()
+        if "description" in changes:
+            description = changes["description"]
+            campaign.description = description.strip() if isinstance(description, str) and description.strip() else None
+
+        self.db.commit()
+        self.db.refresh(campaign)
+        return DMCampaignSummary(
+            id=campaign.id,
+            name=campaign.name,
+            description=campaign.description,
+            epoch_name=campaign.epoch_name,
+            role=membership.role,
+        )
+
+    def delete_campaign(self, campaign_id: int, user_id: int) -> None:
+        campaign, _membership = self._require_dm(campaign_id, user_id)
+        self.db.delete(campaign)
+        self.db.commit()
 
 
     def add_member(self, campaign_id: int, user_id: int, member_user_id: int, role: CampaignRole) -> DMMemberSummary:
@@ -428,16 +481,7 @@ class DMDashboardService:
                 for row, user in members
             ],
             characters=[
-                DMCharacterSummary(
-                    id=character.id,
-                    owner_user_id=character.owner_user_id,
-                    name=character.name,
-                    race=character.race,
-                    character_class=character.character_class,
-                    level=character.level,
-                    status=character.status,
-                    current_game_minute=character.current_game_minute,
-                )
+                self._character_summary(character)
                 for character in characters
             ],
             expeditions=[

@@ -5,6 +5,14 @@ from pydantic import BaseModel, Field
 from db.models import CampaignRole, CharacterStatus, ExpeditionStatus
 
 
+
+
+class DMCampaignUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    description: str | None = None
+    epoch_name: str | None = Field(default=None, min_length=1, max_length=80)
+
+
 class DMMemberSummary(BaseModel):
     user_id: int
     username: str
@@ -64,6 +72,12 @@ class DMCharacterSummary(BaseModel):
     level: int | None
     status: CharacterStatus
     current_game_minute: int
+    current_hp: int | None = None
+    max_hp: int | None = None
+    armor_class: int | None = None
+    passive_perception: int | None = None
+    sheet_version: int | None = None
+    sheet_data: dict | None = None
 
 
 class DMExpeditionParticipantSummary(BaseModel):

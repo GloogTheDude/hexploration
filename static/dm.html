@@ -214,33 +214,22 @@
       </section>
 
       <section id="tab-characters" class="tab-panel hidden" data-panel="characters">
-        <div class="panel-toolbar"><div><strong>Membres & personnages</strong><span class="muted">Ajoute les joueurs à la campagne puis crée leurs personnages sans passer par Swagger.</span></div></div>
+        <div class="panel-toolbar"><div><strong>Membres & personnages</strong><span class="muted">Invite les joueurs. Ils deviennent membres uniquement après avoir accepté et créent ensuite leurs propres personnages.</span></div></div>
         <div class="setup-grid">
           <article class="block">
             <div class="block-head"><h3>Membres de campagne</h3></div>
             <div id="members-list" class="member-list"></div>
             <form id="member-form" class="feature-form compact-form">
-              <strong>Ajouter un membre existant</strong>
+              <strong>Inviter un joueur</strong>
               <label>User ID<input id="member-user-id" type="number" min="1" required></label>
-              <label>Rôle<select id="member-role"><option value="PLAYER">PLAYER</option><option value="DM">DM</option></select></label>
-              <button type="submit">Ajouter à la campagne</button>
+              
+              <button type="submit">Envoyer l’invitation</button>
               <span id="member-message" class="muted"></span>
             </form>
+            <div class="invitation-head"><strong>Invitations envoyées</strong><button id="refresh-invitations" type="button" class="ghost">↻ Actualiser</button></div>
+            <div id="sent-invitations" class="sent-invitations"><div class="empty">Aucune invitation chargée.</div></div>
           </article>
-          <article class="block">
-            <div class="block-head"><h3>Nouveau personnage</h3></div>
-            <form id="character-form" class="feature-form">
-              <label>Propriétaire<select id="character-owner" required></select></label>
-              <label>Nom<input id="character-name" maxlength="120" required></label>
-              <label>Race<input id="character-race" maxlength="120"></label>
-              <label>Classe<input id="character-class" maxlength="120"></label>
-              <label>Niveau<input id="character-level" type="number" min="1" value="1"></label>
-              <label>Minute actuelle<input id="character-minute" type="number" min="0" value="0"></label>
-              <label>Description<textarea id="character-description" rows="3"></textarea></label>
-              <button type="submit">Créer le personnage</button>
-              <span id="character-message" class="muted"></span>
-            </form>
-          </article>
+          <article class="block"><div class="block-head"><h3>Création des personnages</h3></div><p class="muted">Les joueurs créent leurs propres personnages depuis la vue joueur après avoir accepté l’invitation.</p></article>
         </div>
         <div class="panel-toolbar"><div><strong>Personnages de campagne</strong><span class="muted">Horloge individuelle et état actuel.</span></div></div>
         <div id="characters-list" class="character-grid"></div>

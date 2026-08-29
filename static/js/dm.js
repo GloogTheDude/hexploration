@@ -11,10 +11,10 @@ const ui = {
   togglePlanner: $('#toggle-planner'), plannerForm: $('#expedition-planner-form'), planName: $('#plan-name'), planMinute: $('#plan-minute'), planMapVersion: $('#plan-map-version'), planTransport: $('#plan-transport'), planQ: $('#plan-q'), planR: $('#plan-r'), planCharacters: $('#plan-characters'), planStartNow: $('#plan-start-now'), plannerMessage: $('#planner-message'),
   worldMinute: $('#world-minute'), inspectWorld: $('#inspect-world'), useCurrentMinute: $('#use-current-minute'), worldSummary: $('#world-summary'), worldGlobal: $('#world-global'), worldTargets: $('#world-targets'),
   mapsList: $('#maps-list'), charactersList: $('#characters-list'), timelineFrame: $('#timeline-frame'), timelineOpen: $('#timeline-open'),
-  mapEditorOpen: $('#map-editor-open'), membersList: $('#members-list'), memberForm: $('#member-form'), memberUserId: $('#member-user-id'), memberRole: $('#member-role'), memberMessage: $('#member-message'), characterForm: $('#character-form'), characterOwner: $('#character-owner'), characterName: $('#character-name'), characterRace: $('#character-race'), characterClass: $('#character-class'), characterLevel: $('#character-level'), characterMinute: $('#character-minute'), characterDescription: $('#character-description'), characterMessage: $('#character-message'),
+  mapEditorOpen: $('#map-editor-open'), membersList: $('#members-list'), memberForm: $('#member-form'), memberUserId: $('#member-user-id'), memberMessage: $('#member-message'), sentInvitations: $('#sent-invitations'), refreshInvitations: $('#refresh-invitations'),
 };
 
-const state = { userId: null, campaigns: [], campaignId: null, dashboard: null, expeditionId: null, tab: 'overview', mapWorkbench: null, selectedHex: null, selectedPoiId: null, selectedEdgeId: null, edgeFrom: null };
+const state = { userId: null, campaigns: [], campaignId: null, dashboard: null, invitations: [], expeditionId: null, tab: 'overview', mapWorkbench: null, selectedHex: null, selectedPoiId: null, selectedEdgeId: null, edgeFrom: null };
 
 Object.assign(ui, {
   toggleCampaignCreate: $('#toggle-campaign-create'), campaignCreateForm: $('#campaign-create-form'), campaignCreateName: $('#campaign-create-name'), campaignCreateEpoch: $('#campaign-create-epoch'), campaignCreateDescription: $('#campaign-create-description'), campaignCreateMessage: $('#campaign-create-message'), cancelCampaignCreate: $('#cancel-campaign-create'),
@@ -161,32 +161,35 @@ function renderMaps() {
   renderWorkbenchVersionOptions();
 }
 
+function statValue(v) { return v == null ? '—' : esc(v); }
 function renderCharacters() {
-  const d = state.dashboard;
-  ui.membersList.innerHTML = d.members.map(m => `<div class="member-row"><div><strong>${esc(m.username)}</strong><span class="small">${esc(m.email)} · user #${m.user_id}</span></div><span class="badge">${m.role}</span></div>`).join('') || '<div class="empty">Aucun membre.</div>';
-  ui.characterOwner.innerHTML = d.members.map(m => `<option value="${m.user_id}">${esc(m.username)} · ${m.role} · #${m.user_id}</option>`).join('');
-  if (!ui.characterName.value) ui.characterMinute.value = d.campaign_game_minute;
-  ui.charactersList.innerHTML = d.characters.map(c => { const owner=d.members.find(m=>m.user_id===c.owner_user_id); return `<article class="character-card"><div class="record-head"><h3>${esc(c.name)}</h3><span class="status status-${c.status}">${c.status}</span></div><div class="small">#${c.id} · ${owner ? esc(owner.username) : `owner #${c.owner_user_id}`}</div><div>${esc(c.race || '—')} · ${esc(c.character_class || '—')}${c.level ? ` niv.${c.level}` : ''}</div><div class="small">Horloge: m.${c.current_game_minute} · ${dayMinute(c.current_game_minute)}</div></article>`; }).join('') || '<div class="empty">Aucun personnage.</div>';
+  const d=state.dashboard;
+  ui.membersList.innerHTML=d.members.map(m=>`<div class="member-row"><div><strong>${esc(m.username)}</strong><span class="small">${esc(m.email)} · user #${m.user_id}</span></div><span class="badge">${m.role}</span></div>`).join('')||'<div class="empty">Aucun membre.</div>';
+  ui.charactersList.innerHTML=d.characters.map(c=>{const owner=d.members.find(m=>m.user_id===c.owner_user_id);const hp=c.current_hp==null&&c.max_hp==null?'— / —':`${statValue(c.current_hp)} / ${statValue(c.max_hp)}`;return `<article class="character-card"><div class="record-head"><h3>${esc(c.name)}</h3><span class="status status-${c.status}">${c.status}</span></div><div class="small">#${c.id} · ${owner?esc(owner.username):`owner #${c.owner_user_id}`}</div><div>${esc(c.race||'—')} · ${esc(c.character_class||'—')}${c.level?` niv.${c.level}`:''}</div><div class="dm-character-stats"><span><b>PV</b> ${hp}</span><span><b>CA</b> ${statValue(c.armor_class)}</span><span><b>PP</b> ${statValue(c.passive_perception)}</span></div><button type="button" class="ghost dm-sheet-open" data-character-sheet="${c.id}" ${c.sheet_data?'':'disabled'}>${c.sheet_data?'Voir la fiche':'Fiche non initialisée'}</button></article>`}).join('')||'<div class="empty">Aucun personnage.</div>';
+  ui.charactersList.querySelectorAll('[data-character-sheet]').forEach(btn=>btn.addEventListener('click',()=>openDMSheet(Number(btn.dataset.characterSheet))));
 }
+function openDMSheet(id){const c=state.dashboard?.characters.find(x=>x.id===id);if(!c?.sheet_data)return;const d=c.sheet_data;const f=[['FOR',d.strength],['DEX',d.dexterity],['CON',d.constitution],['INT',d.intelligence],['SAG',d.wisdom],['CHA',d.charisma],['PV',`${statValue(d.current_hp)} / ${statValue(d.max_hp)}`],['CA',d.armor_class],['Perception passive',d.passive_perception],['Initiative',d.initiative],['Maîtrise',d.proficiency_bonus],['Background',d.background],['Alignement',d.alignment]];const t=[['Attaques & sorts',d.attacks_spellcasting],['Équipement',d.equipment],['Maîtrises & langues',d.proficiencies_languages],['Traits',d.features_traits],['Notes',d.notes]];const m=document.createElement('div');m.className='dm-sheet-backdrop';m.innerHTML=`<section class="dm-sheet-modal" role="dialog" aria-modal="true"><div class="dm-sheet-head"><div><span class="eyebrow">Fiche personnage · lecture seule · v${c.sheet_version}</span><h2>${esc(c.name)}</h2><div class="muted">${esc(c.race||'—')} · ${esc(c.character_class||'—')}${c.level?` niv.${c.level}`:''}</div></div><button type="button" class="ghost" data-close-sheet>Fermer</button></div><div class="dm-sheet-stat-grid">${f.map(([k,v])=>`<div><span>${esc(k)}</span><strong>${statValue(v)}</strong></div>`).join('')}</div><div class="dm-sheet-text-grid">${t.map(([k,v])=>`<section><strong>${esc(k)}</strong><p>${esc(v||'—')}</p></section>`).join('')}</div></section>`;document.body.appendChild(m);const close=()=>m.remove();m.querySelector('[data-close-sheet]').addEventListener('click',close);m.addEventListener('click',e=>{if(e.target===m)close()})}
+
+function invitationStatusLabel(status){ return status==='PENDING'?'En attente':status==='ACCEPTED'?'Acceptée':status==='REFUSED'?'Refusée':status; }
+function renderSentInvitations(){
+  if(!ui.sentInvitations) return;
+  ui.sentInvitations.innerHTML = state.invitations.map(i => `<div class="invitation-row"><div><strong>${esc(i.invited_username)}</strong><span class="small">user #${i.invited_user_id}</span></div><span class="invite-status invite-${i.status}">${invitationStatusLabel(i.status)}</span>${i.status==='REFUSED'?`<button type="button" class="ghost" data-reinvite="${i.invited_user_id}">Réinviter</button>`:''}</div>`).join('') || '<div class="empty">Aucune invitation envoyée.</div>';
+  ui.sentInvitations.querySelectorAll('[data-reinvite]').forEach(btn=>btn.addEventListener('click',()=>reinvite(Number(btn.dataset.reinvite))));
+}
+async function refreshInvitations(){
+  if(!state.campaignId||!state.userId)return;
+  try{ state.invitations=await api(`/api/campaigns/${state.campaignId}/invitations?user_id=${state.userId}`); renderSentInvitations(); }
+  catch(e){ if(ui.memberMessage){ui.memberMessage.classList.add('error');ui.memberMessage.textContent=e.message;} }
+}
+async function reinvite(userId){ ui.memberUserId.value=userId; await addMember(new Event('submit')); }
 
 async function addMember(event) {
   event.preventDefault();
   ui.memberMessage.classList.remove('error'); ui.memberMessage.textContent = 'Ajout…';
   try {
-    await api(`/api/campaigns/${state.campaignId}/dm-members?user_id=${state.userId}`, {method:'POST', body:JSON.stringify({user_id:Number(ui.memberUserId.value), role:ui.memberRole.value})});
-    ui.memberUserId.value=''; await refreshDashboard(); ui.memberMessage.textContent='Membre ajouté.';
+    await api(`/api/campaigns/${state.campaignId}/invitations?user_id=${state.userId}`, {method:'POST', body:JSON.stringify({invited_user_id:Number(ui.memberUserId.value)})});
+    ui.memberUserId.value=''; ui.memberMessage.textContent='Invitation envoyée.'; await refreshInvitations();
   } catch(e) { ui.memberMessage.classList.add('error'); ui.memberMessage.textContent=e.message; }
-}
-
-async function createCharacter(event) {
-  event.preventDefault();
-  ui.characterMessage.classList.remove('error'); ui.characterMessage.textContent='Création…';
-  const level = ui.characterLevel.value ? Number(ui.characterLevel.value) : null;
-  const payload={owner_user_id:Number(ui.characterOwner.value),name:ui.characterName.value.trim(),race:ui.characterRace.value.trim()||null,character_class:ui.characterClass.value.trim()||null,level,description:ui.characterDescription.value.trim()||null,current_game_minute:Number(ui.characterMinute.value)};
-  try {
-    const c=await api(`/api/campaigns/${state.campaignId}/dm-characters?user_id=${state.userId}`,{method:'POST',body:JSON.stringify(payload)});
-    ui.characterName.value='';ui.characterRace.value='';ui.characterClass.value='';ui.characterDescription.value='';await refreshDashboard();ui.characterMessage.textContent=`${c.name} créé (#${c.id}).`;
-  } catch(e) { ui.characterMessage.classList.add('error'); ui.characterMessage.textContent=e.message; }
 }
 
 async function inspectWorld() {
@@ -209,6 +212,75 @@ function loadTimeline() {
   ui.timelineOpen.href = `/timeline.html?campaign_id=${state.campaignId}`;
 }
 
+function openCampaignEditor() {
+  const campaign = state.dashboard?.campaign;
+  if (!campaign) return;
+  const modal = document.createElement('div');
+  modal.className = 'dm-sheet-backdrop';
+  modal.innerHTML = `<section class="dm-sheet-modal campaign-settings-modal" role="dialog" aria-modal="true" aria-labelledby="campaign-settings-title">
+    <div class="dm-sheet-head"><div><span class="eyebrow">Paramètres campagne</span><h2 id="campaign-settings-title">Modifier ${esc(campaign.name)}</h2></div><button type="button" class="ghost" data-close-campaign-settings>Fermer</button></div>
+    <form id="campaign-settings-form" class="campaign-settings-form">
+      <label>Nom<input id="campaign-settings-name" maxlength="160" required value="${esc(campaign.name)}"></label>
+      <label>Nom de l'époque<input id="campaign-settings-epoch" maxlength="80" required value="${esc(campaign.epoch_name)}"></label>
+      <label>Description<textarea id="campaign-settings-description" rows="5">${esc(campaign.description || '')}</textarea></label>
+      <div class="planner-actions"><button type="submit">Enregistrer</button><button type="button" class="secondary" data-close-campaign-settings>Annuler</button></div>
+      <p id="campaign-settings-message" class="muted"></p>
+    </form>
+  </section>`;
+  document.body.appendChild(modal);
+  const close = () => modal.remove();
+  modal.querySelectorAll('[data-close-campaign-settings]').forEach(button => button.addEventListener('click', close));
+  modal.addEventListener('click', event => { if (event.target === modal) close(); });
+  modal.querySelector('#campaign-settings-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const message = modal.querySelector('#campaign-settings-message');
+    message.classList.remove('error'); message.textContent = 'Enregistrement…';
+    try {
+      await api(`/api/campaigns/${state.campaignId}/dm-settings?user_id=${state.userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: modal.querySelector('#campaign-settings-name').value.trim(),
+          epoch_name: modal.querySelector('#campaign-settings-epoch').value.trim(),
+          description: modal.querySelector('#campaign-settings-description').value.trim() || null,
+        }),
+      });
+      state.campaigns = await api(`/api/users/${state.userId}/dm-campaigns`);
+      renderCampaigns();
+      await refreshDashboard();
+      close();
+    } catch (error) {
+      message.classList.add('error'); message.textContent = error.message;
+    }
+  });
+}
+
+async function deleteCurrentCampaign() {
+  const campaign = state.dashboard?.campaign;
+  if (!campaign) return;
+  const typed = window.prompt(`Suppression définitive de « ${campaign.name} » et de toutes ses données.\n\nTape exactement le nom de la campagne pour confirmer :`);
+  if (typed === null) return;
+  if (typed !== campaign.name) {
+    ui.error.textContent = 'Suppression annulée : le nom saisi ne correspond pas.';
+    return;
+  }
+  try {
+    await api(`/api/campaigns/${campaign.id}/dm-settings?user_id=${state.userId}`, { method: 'DELETE' });
+    state.campaigns = await api(`/api/users/${state.userId}/dm-campaigns`);
+    state.campaignId = null; state.dashboard = null; state.expeditionId = null;
+    qs('campaign', null); renderCampaigns();
+    ui.campaignTitle.textContent = 'Aucune campagne sélectionnée';
+    ui.campaignDescription.textContent = 'Choisis une campagne MJ dans la colonne de gauche.';
+    ui.campaignActions.innerHTML = '';
+    ui.campaignMinute.textContent = '—'; ui.campaignDay.textContent = 'Sélectionne une campagne.';
+    ui.stats.classList.add('hidden'); ui.empty.classList.remove('hidden');
+    ui.identity.textContent = `${state.campaigns.length} campagne(s) administrée(s) comme MJ.`;
+    const next = state.campaigns[0];
+    if (next) await selectCampaign(next.id);
+  } catch (error) {
+    ui.error.textContent = error.message;
+  }
+}
+
 function renderDashboard() {
   const d = state.dashboard;
   ui.empty.classList.add('hidden'); ui.stats.classList.remove('hidden');
@@ -216,7 +288,9 @@ function renderDashboard() {
   ui.campaignTitle.textContent = d.campaign.name; ui.campaignDescription.textContent = d.campaign.description || 'Aucune description.';
   ui.campaignMinute.textContent = d.campaign_game_minute; ui.campaignDay.textContent = `${d.campaign.epoch_name} · ${dayMinute(d.campaign_game_minute)}`;
   ui.statExpeditions.textContent = d.active_expedition_count; ui.statCharacters.textContent = d.character_count; ui.statMaps.textContent = d.map_count; ui.statEvents.textContent = d.recent_events.length;
-  ui.campaignActions.innerHTML = `<a class="button-link" href="/timeline.html?campaign_id=${d.campaign.id}">Timeline</a><a class="button-link" href="/?user=${state.userId}&campaign=${d.campaign.id}">Map editor</a><a class="button-link" href="/dashboard.html?user=${state.userId}&campaign=${d.campaign.id}">Vue joueur</a>`;
+  ui.campaignActions.innerHTML = `<button type="button" class="secondary" id="edit-campaign">Modifier</button><button type="button" class="danger" id="delete-campaign">Supprimer</button><a class="button-link" href="/timeline.html?campaign_id=${d.campaign.id}">Timeline</a><a class="button-link" href="/?user=${state.userId}&campaign=${d.campaign.id}">Map editor</a><a class="button-link" href="/dashboard.html?user=${state.userId}&campaign=${d.campaign.id}">Vue joueur</a>`;
+  $('#edit-campaign')?.addEventListener('click', openCampaignEditor);
+  $('#delete-campaign')?.addEventListener('click', deleteCurrentCampaign);
   if (ui.mapEditorOpen) ui.mapEditorOpen.href = `/?user=${state.userId}&campaign=${d.campaign.id}`;
   ui.worldMinute.value = d.campaign_game_minute; delete ui.worldSummary.dataset.loaded;
   if (!state.expeditionId || !d.expeditions.some(e => e.id === state.expeditionId)) state.expeditionId = d.expeditions.find(e => e.status === 'ACTIVE')?.id || d.expeditions[0]?.id || null;
@@ -225,8 +299,9 @@ function renderDashboard() {
 
 async function refreshDashboard() {
   if (!state.campaignId || !state.userId) return;
-  state.dashboard = await api(`/api/campaigns/${state.campaignId}/dm-dashboard?user_id=${state.userId}`);
-  renderDashboard();
+  const [dashboard, invitations] = await Promise.all([api(`/api/campaigns/${state.campaignId}/dm-dashboard?user_id=${state.userId}`), api(`/api/campaigns/${state.campaignId}/invitations?user_id=${state.userId}`)]);
+  state.dashboard = dashboard; state.invitations = invitations;
+  renderDashboard(); renderSentInvitations();
 }
 
 async function selectCampaign(id) {
@@ -260,7 +335,7 @@ ui.togglePlanner.addEventListener('click', () => {
 });
 ui.plannerForm.addEventListener('submit', createExpeditionPlan);
 ui.memberForm?.addEventListener('submit', addMember);
-ui.characterForm?.addEventListener('submit', createCharacter);
+ui.refreshInvitations?.addEventListener('click', refreshInvitations);
 ui.refreshExpeditions.addEventListener('click', refreshDashboard); ui.inspectWorld.addEventListener('click', inspectWorld); ui.useCurrentMinute.addEventListener('click', () => { if (state.dashboard) { ui.worldMinute.value = state.dashboard.campaign_game_minute; inspectWorld(); } });
 const initialUser = Number(new URL(location.href).searchParams.get('user')); if (initialUser) ui.userId.value = initialUser;
 loadUser();

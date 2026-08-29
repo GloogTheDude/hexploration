@@ -29,6 +29,12 @@
     </section>
 
     <section class="card">
+      <div class="card-head-inline"><h2>Invitations</h2><button id="refresh-invitations" type="button" class="small-button">↻</button></div>
+      <div id="invitations" class="stack muted">Aucune invitation chargée.</div>
+      <p id="invitation-message" class="muted compact"></p>
+    </section>
+
+    <section class="card">
       <h2>Campagnes</h2>
       <div id="campaigns" class="stack muted">Aucune campagne chargée.</div>
     </section>
@@ -36,6 +42,7 @@
     <section class="card">
       <h2>Personnages</h2>
       <div id="characters" class="stack muted">Sélectionne une campagne.</div>
+      <button id="toggle-character-create" class="hidden" type="button">+ Nouveau personnage</button>
     </section>
 
     <section class="card">
@@ -114,5 +121,128 @@
     </section>
   </section>
 </main>
+
+<div id="character-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="character-modal-title">
+  <section class="modal-card">
+    <div class="modal-head"><div><div class="eyebrow">Personnage joueur</div><h2 id="character-modal-title">Nouveau personnage</h2></div><button id="close-character-modal" class="icon-button" type="button" aria-label="Fermer">×</button></div>
+    <form id="character-create-form" class="character-form">
+      <label class="full">Nom<input id="character-create-name" maxlength="120" required></label>
+      <label>Race<input id="character-create-race" maxlength="120"></label>
+      <label>Classe<input id="character-create-class" maxlength="120"></label>
+      <label>Niveau<input id="character-create-level" type="number" min="1" value="1"></label>
+      <label class="full">Description<textarea id="character-create-description" rows="5"></textarea></label>
+      <p id="character-create-message" class="muted compact full"></p>
+      <div class="modal-actions full"><button id="cancel-character-create" type="button" class="secondary">Annuler</button><button type="submit">Créer mon personnage</button></div>
+    </form>
+  </section>
+</div>
+
+<div id="sheet-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="sheet-modal-title">
+  <section class="modal-card sheet-editor-card">
+    <div class="modal-head">
+      <div><div class="eyebrow">Fiche de personnage</div><h2 id="sheet-modal-title">Fiche</h2></div>
+      <button id="close-sheet-modal" class="icon-button" type="button" aria-label="Fermer">×</button>
+    </div>
+
+    <div class="sheet-editor-toolbar">
+      <div>
+        <strong id="sheet-current-label">Chargement…</strong>
+        <div id="sheet-current-meta" class="muted compact">Les données de la base sont la source de vérité.</div>
+      </div>
+      <div class="actions">
+        <a id="sheet-export-pdf" class="button-link hidden" target="_blank" rel="noopener">Exporter PDF</a>
+        <button id="sheet-save" type="submit" form="sheet-data-form">Enregistrer une version</button>
+      </div>
+    </div>
+    <p id="sheet-message" class="muted compact" role="status"></p>
+
+    <form id="sheet-data-form" class="sheet-data-form">
+      <section class="sheet-section">
+        <h3>Identité</h3>
+        <div class="sheet-grid identity-grid">
+          <label class="span-2">Nom du personnage<input name="character_name" maxlength="120" required></label>
+          <label>Joueur<input name="player_name" maxlength="120"></label>
+          <label>Race<input name="race" maxlength="120"></label>
+          <label>Classe<input name="character_class" maxlength="120"></label>
+          <label>Niveau<input name="level" type="number" min="1" max="20"></label>
+          <label>Background<input name="background" maxlength="160"></label>
+          <label>Alignement<input name="alignment" maxlength="80"></label>
+          <label>XP<input name="experience_points" type="number" min="0"></label>
+        </div>
+      </section>
+
+      <section class="sheet-section">
+        <h3>Caractéristiques</h3>
+        <div class="ability-grid">
+          <label>FOR<input name="strength" type="number" min="1" max="30" value="10"><span class="ability-mod" data-mod-for="strength">+0</span></label>
+          <label>DEX<input name="dexterity" type="number" min="1" max="30" value="10"><span class="ability-mod" data-mod-for="dexterity">+0</span></label>
+          <label>CON<input name="constitution" type="number" min="1" max="30" value="10"><span class="ability-mod" data-mod-for="constitution">+0</span></label>
+          <label>INT<input name="intelligence" type="number" min="1" max="30" value="10"><span class="ability-mod" data-mod-for="intelligence">+0</span></label>
+          <label>SAG<input name="wisdom" type="number" min="1" max="30" value="10"><span class="ability-mod" data-mod-for="wisdom">+0</span></label>
+          <label>CHA<input name="charisma" type="number" min="1" max="30" value="10"><span class="ability-mod" data-mod-for="charisma">+0</span></label>
+        </div>
+      </section>
+
+      <section class="sheet-section">
+        <h3>Combat</h3>
+        <div class="sheet-grid combat-grid">
+          <label>CA<input name="armor_class" type="number" min="0" max="99"></label>
+          <label>Initiative<input name="initiative" type="number" min="-20" max="30"></label>
+          <label>Vitesse<input name="speed" maxlength="40" placeholder="9 m / 30 ft"></label>
+          <label>Bonus de maîtrise<input name="proficiency_bonus" type="number" min="0" max="20"></label>
+          <label>PV max<input name="max_hp" type="number" min="0"></label>
+          <label>PV actuels<input name="current_hp" type="number"></label>
+          <label>PV temporaires<input name="temp_hp" type="number" min="0"></label>
+          <label>Perception passive<input name="passive_perception" type="number" min="0" max="99"></label>
+          <label>Dés de vie totaux<input name="hit_dice_total" maxlength="40" placeholder="4d10"></label>
+          <label>Dés de vie restants<input name="hit_dice_current" maxlength="40" placeholder="3d10"></label>
+        </div>
+      </section>
+
+      <section class="sheet-section">
+        <h3>Combat & équipement</h3>
+        <div class="sheet-grid text-grid">
+          <label>Attaques & sorts<textarea name="attacks_spellcasting" rows="5"></textarea></label>
+          <label>Équipement<textarea name="equipment" rows="5"></textarea></label>
+          <label>Maîtrises & langues<textarea name="proficiencies_languages" rows="5"></textarea></label>
+          <label>Capacités & traits<textarea name="features_traits" rows="5"></textarea></label>
+        </div>
+      </section>
+
+      <section class="sheet-section">
+        <h3>Personnalité</h3>
+        <div class="sheet-grid text-grid">
+          <label>Traits de personnalité<textarea name="personality_traits" rows="3"></textarea></label>
+          <label>Idéaux<textarea name="ideals" rows="3"></textarea></label>
+          <label>Liens<textarea name="bonds" rows="3"></textarea></label>
+          <label>Défauts<textarea name="flaws" rows="3"></textarea></label>
+        </div>
+      </section>
+
+      <details class="sheet-section sheet-details">
+        <summary>Biographie & détails</summary>
+        <div class="sheet-grid bio-grid">
+          <label>Âge<input name="age" maxlength="40"></label>
+          <label>Taille<input name="height" maxlength="40"></label>
+          <label>Poids<input name="weight" maxlength="40"></label>
+          <label>Yeux<input name="eyes" maxlength="80"></label>
+          <label>Peau<input name="skin" maxlength="80"></label>
+          <label>Cheveux<input name="hair" maxlength="80"></label>
+          <label class="span-2">Apparence<textarea name="appearance" rows="4"></textarea></label>
+          <label class="span-2">Alliés & organisations<textarea name="allies_organizations" rows="4"></textarea></label>
+          <label class="span-2">Histoire<textarea name="backstory" rows="6"></textarea></label>
+          <label class="span-2">Capacités supplémentaires<textarea name="additional_features_traits" rows="5"></textarea></label>
+          <label class="span-2">Trésor<textarea name="treasure" rows="4"></textarea></label>
+          <label class="span-2">Notes Hexploration <span class="muted">(conservées en DB, non exportées sur la fiche officielle)</span><textarea name="notes" rows="5"></textarea></label>
+        </div>
+      </details>
+    </form>
+
+    <section class="sheet-history-panel">
+      <div class="card-head-inline"><h3>Historique</h3><span class="muted compact">Charger une ancienne version ne l'écrase pas : Enregistrer crée une nouvelle version.</span></div>
+      <div id="sheet-history" class="sheet-history"><div class="empty">Aucune version.</div></div>
+    </section>
+  </section>
+</div>
 </body>
 </html>

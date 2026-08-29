@@ -174,3 +174,75 @@ def test_dm_can_persist_current_editor_as_campaign_map(db: Session, campaign):
     assert version.width == 2
     assert version.height == 2
     assert count == 4
+
+
+def test_dm_can_update_campaign_settings(db: Session, campaign):
+    from dto.dm_dashboard_dto import DMCampaignUpdate
+
+    dm = make_user(db, "campaign_editor")
+    db.add(CampaignMembership(campaign_id=campaign.id, user_id=dm.id, role=CampaignRole.DM))
+    db.commit()
+
+    result = DMDashboardService(db).update_campaign(
+        campaign.id,
+        dm.id,
+        DMCampaignUpdate(name="  Nouvelle Marche  ", epoch_name="An 12", description="  Nouveau pitch  "),
+    )
+
+    assert result.name == "Nouvelle Marche"
+    assert result.epoch_name == "An 12"
+    assert result.description == "Nouveau pitch"
+    db.refresh(campaign)
+    assert campaign.name == "Nouvelle Marche"
+
+
+def test_player_cannot_update_or_delete_campaign(db: Session, campaign):
+    from dto.dm_dashboard_dto import DMCampaignUpdate
+
+    player = make_user(db, "campaign_intruder")
+    db.add(CampaignMembership(campaign_id=campaign.id, user_id=player.id, role=CampaignRole.PLAYER))
+    db.commit()
+
+    service = DMDashboardService(db)
+    for operation in (
+        lambda: service.update_campaign(campaign.id, player.id, DMCampaignUpdate(name="Nope")),
+        lambda: service.delete_campaign(campaign.id, player.id),
+    ):
+        try:
+            operation()
+        except ForbiddenOperationError:
+            pass
+        else:
+            raise AssertionError("Expected PLAYER campaign mutation to be forbidden")
+
+
+def test_dm_can_delete_campaign_and_cascade_its_data(db: Session, campaign):
+    dm = make_user(db, "campaign_delete")
+    player = make_user(db, "campaign_delete_player")
+    db.add_all([
+        CampaignMembership(campaign_id=campaign.id, user_id=dm.id, role=CampaignRole.DM),
+        CampaignMembership(campaign_id=campaign.id, user_id=player.id, role=CampaignRole.PLAYER),
+    ])
+    db.flush()
+    character = Character(
+        campaign_id=campaign.id,
+        owner_user_id=player.id,
+        name="Temporary Hero",
+        race="Human",
+        character_class="Fighter",
+        level=1,
+        status=CharacterStatus.ACTIVE,
+        current_game_minute=0,
+    )
+    world_map = WorldMap(campaign_id=campaign.id, name="Temporary Map", description=None)
+    db.add_all([character, world_map])
+    db.commit()
+    campaign_id = campaign.id
+    character_id = character.id
+    map_id = world_map.id
+
+    DMDashboardService(db).delete_campaign(campaign_id, dm.id)
+
+    assert db.get(Campaign, campaign_id) is None
+    assert db.get(Character, character_id) is None
+    assert db.get(WorldMap, map_id) is None

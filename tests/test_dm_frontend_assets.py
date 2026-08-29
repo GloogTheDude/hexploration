@@ -63,10 +63,11 @@ def test_dm_dashboard_bootstraps_members_characters_and_campaign_editor():
     html = HTML.read_text(encoding="utf-8")
     js = JS.read_text(encoding="utf-8")
     assert 'id="member-form"' in html
-    assert 'id="character-form"' in html
+    assert 'id="character-form"' not in html
+    assert 'Inviter un joueur' in html
     assert 'id="map-editor-open"' in html
-    assert "/dm-members?user_id=" in js
-    assert "/dm-characters?user_id=" in js
+    assert "/invitations?user_id=" in js
+    assert "/dm-characters?user_id=" not in js
     assert "/?user=${state.userId}&campaign=${d.campaign.id}" in js
 
 
@@ -75,3 +76,23 @@ def test_dm_map_versions_link_to_version_editor_without_internal_id_hunting():
     assert 'Éditer → nouvelle version' in js
     assert '&map=${m.id}&version=${v.id}' in js
     assert 'identité POI #${p.feature_id}' in js
+
+
+def test_dm_dashboard_shows_sent_invitation_status_and_reinvite_action():
+    html = HTML.read_text(encoding="utf-8")
+    js = JS.read_text(encoding="utf-8")
+    assert 'id="sent-invitations"' in html
+    assert 'Invitations envoyées' in html
+    assert '/invitations?user_id=${state.userId}' in js
+    assert 'invite-${i.status}' in js
+    assert 'data-reinvite' in js
+
+
+def test_dm_dashboard_can_update_and_delete_selected_campaign():
+    js = JS.read_text(encoding="utf-8")
+    assert 'id="edit-campaign"' in js
+    assert 'id="delete-campaign"' in js
+    assert '/dm-settings?user_id=${state.userId}' in js
+    assert "method: 'PATCH'" in js
+    assert "method: 'DELETE'" in js
+    assert 'Tape exactement le nom de la campagne' in js

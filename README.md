@@ -698,3 +698,73 @@ alembic upgrade head
 ```
 
 New head: `0007_semantic_map_features`.
+
+
+## v24 — Campaign invitations and player-owned character creation
+
+Campaign entry now follows an explicit invitation flow: a DM invites an existing user, the invitation remains `PENDING`, and no membership exists until the invited user accepts. Acceptance creates a `PLAYER` membership; refusal creates none. The player dashboard exposes pending invitations and Accept/Refuse actions. Once accepted, the player can select the campaign and create their own character. The DM dashboard no longer creates player characters. User-ID invitation is intentionally retained for the current test phase; name/email lookup is deferred.
+
+Migration: `0008_campaign_invitations`.
+
+## v25 — Campaign onboarding UX
+
+- Player character creation now opens in a responsive modal instead of squeezing the form into the sidebar.
+- Players can permanently delete their own characters only while they have no expedition history.
+- Historical characters are preserved and can be retired (`ACTIVE -> RETIRED`) instead of being physically deleted.
+- Player invitations refresh automatically while the dashboard is visible and also expose a manual refresh button.
+- The DM campaign member panel now lists sent invitations and their `PENDING`, `ACCEPTED`, or `REFUSED` state.
+- Refused invitations can be sent again directly from the DM dashboard.
+- No Alembic migration is required after v24; database head remains `0008_campaign_invitations`.
+
+Validation: `pytest` -> 110 passed.
+
+## v26 - Character sheet PDF workspace
+
+Player characters now have a PDF sheet workspace in `/dashboard.html`.
+
+- `Fiche PDF` opens the current sheet inline and exposes version history.
+- A player may upload a PDF; each upload creates a new immutable `CharacterSheetVersion` and makes it current.
+- The sheet is owner-scoped through the temporary `user_id` auth context used by the current MVP.
+- Immediately after player character creation, the dashboard asks the backend to create a personal version 1 from the official D&D 5e fillable character sheet and opens it.
+- The official PDF is **not bundled in the repository**. On first use the backend downloads it from Wizards of the Coast and caches it locally at `storage/templates/5E_CharacterSheet_Fillable.pdf`.
+- For offline/self-hosted use, download the template yourself and set `CHARACTER_SHEET_TEMPLATE_PATH` in `.env`.
+- Browser PDF viewers can fill the AcroForm, but browsers do not expose those unsaved edits back to Hexploration. Use the viewer's Save/Download action, then upload the resulting PDF in the same modal. The uploaded copy becomes the next persisted version.
+
+Relevant routes:
+
+```text
+POST /api/characters/{character_id}/sheets/template?user_id=...
+POST /api/characters/{character_id}/sheets?user_id=...
+GET  /api/characters/{character_id}/sheets?user_id=...
+GET  /api/characters/{character_id}/sheets/current?user_id=...
+GET  /api/characters/{character_id}/sheets/current/pdf?user_id=...
+GET  /api/characters/{character_id}/sheets/{version}/pdf?user_id=...
+```
+
+No Alembic migration is required for v26; the existing `character_sheet_versions` table already models sheet history.
+
+## v27 — Fiche personnage native + export PDF
+
+La fiche PDF n'est plus l'éditeur principal. Les données de personnage sont maintenant éditées directement dans Hexploration et versionnées en base de données.
+
+- `CharacterSheetDataVersion` conserve un snapshot JSON immuable à chaque clic sur **Enregistrer une version**.
+- L'ouverture de la fiche initialise automatiquement la version 1 depuis les informations déjà présentes sur `Character` (nom, race, classe, niveau, description et joueur).
+- Le formulaire couvre identité, six caractéristiques, combat, équipement, personnalité et biographie. Les modificateurs de caractéristiques sont calculés automatiquement dans l'UI et lors de l'export.
+- Les champs d'identité sauvegardés dans la fiche resynchronisent la carte `Character` afin d'éviter deux sources contradictoires pour nom/race/classe/niveau.
+- Une ancienne version peut être rechargée dans le formulaire; l'enregistrer crée une nouvelle version au lieu de modifier l'historique.
+- **Exporter PDF** génère le PDF à la demande depuis n'importe quelle version DB. Le template officiel remplissable reste seulement un format de sortie.
+- Le template est chargé depuis `CHARACTER_SHEET_TEMPLATE_PATH` s'il est configuré; sinon le backend essaie de mettre en cache la fiche officielle Wizards au premier export.
+- Les anciens endpoints d'upload PDF v26 restent présents pour compatibilité, mais ne sont plus exposés dans l'interface principale.
+
+Migration : `0009_character_sheet_data`.
+
+Routes principales :
+
+```text
+POST /api/characters/{character_id}/sheet-data/initialize?user_id=...
+POST /api/characters/{character_id}/sheet-data?user_id=...
+GET  /api/characters/{character_id}/sheet-data?user_id=...
+GET  /api/characters/{character_id}/sheet-data/current?user_id=...
+GET  /api/characters/{character_id}/sheet-data/current/pdf?user_id=...
+GET  /api/characters/{character_id}/sheet-data/{version}/pdf?user_id=...
+```

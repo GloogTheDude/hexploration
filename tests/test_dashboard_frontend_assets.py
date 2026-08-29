@@ -55,3 +55,23 @@ def test_dashboard_embeds_player_map_without_duplicate_topbar():
     assert "&embedded=1" in dashboard_js
     assert 'get("embedded") === "1"' in player_js
     assert "body.embedded .topbar { display: none; }" in player_css
+
+
+def test_player_character_creation_uses_modal_and_exposes_lifecycle_actions():
+    html = DASHBOARD_HTML.read_text(encoding="utf-8")
+    js = DASHBOARD_JS.read_text(encoding="utf-8")
+    css = DASHBOARD_CSS.read_text(encoding="utf-8")
+    assert 'id="character-modal"' in html
+    assert 'id="close-character-modal"' in html
+    assert 'data-character-delete' in js
+    assert '/retire?user_id=${state.user.id}' in js
+    assert 'method:\'DELETE\'' in js
+    assert '.modal-backdrop' in css
+
+
+def test_player_invitations_refresh_without_full_page_reload():
+    html = DASHBOARD_HTML.read_text(encoding="utf-8")
+    js = DASHBOARD_JS.read_text(encoding="utf-8")
+    assert 'id="refresh-invitations"' in html
+    assert 'setInterval' in js
+    assert '/campaign-invitations`' in js
