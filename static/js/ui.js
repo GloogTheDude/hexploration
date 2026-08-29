@@ -2,14 +2,12 @@ import { state } from "./state.js";
 
 export function createTerrainButtons() {
     const container = document.getElementById("terrain-buttons");
-
     if (!container) return;
 
     container.innerHTML = "";
 
     for (const [key, terrain] of Object.entries(state.terrains)) {
         const button = document.createElement("button");
-
         button.classList.add("terrain-btn");
         button.dataset.terrain = key;
 
@@ -20,7 +18,6 @@ export function createTerrainButtons() {
 
         button.addEventListener("click", () => {
             state.selectedTerrainKey = key;
-            console.log("Selected terrain:", key);
         });
 
         container.appendChild(button);

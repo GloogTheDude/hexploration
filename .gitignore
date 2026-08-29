@@ -73,3 +73,7 @@ Thumbs.db
 *.tar
 *.tar.gz
 *.bak
+
+
+# Character sheets and other user uploads
+storage/uploads/

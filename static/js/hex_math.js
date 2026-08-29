@@ -8,7 +8,6 @@ export function axialToPixel(q, r, size) {
 export function pixelToAxial(x, y, size) {
     const q = ((Math.sqrt(3) / 3) * x - y / 3) / size;
     const r = ((2 / 3) * y) / size;
-
     return axialRound(q, r);
 }
 
@@ -50,10 +49,8 @@ export function getHexLine(a, b) {
 
     for (let i = 0; i <= distance; i++) {
         const t = distance === 0 ? 0 : i / distance;
-
         const q = a.q + (b.q - a.q) * t;
         const r = a.r + (b.r - a.r) * t;
-
         results.push(axialRound(q, r));
     }
 

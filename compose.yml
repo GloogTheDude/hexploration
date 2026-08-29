@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:18
+    container_name: hexploration_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hexploration
+      POSTGRES_USER: hexploration
+      POSTGRES_PASSWORD: hexploration_password
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hexploration -d hexploration"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:

@@ -5,5 +5,5 @@ export const state = {
     isBrushOn: false,
     isPainting: false,
     lastPaintedHex: null,
-    brushRadius : 1
+    brushRadius: 1
 };

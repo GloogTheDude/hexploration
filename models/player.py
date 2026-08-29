@@ -5,7 +5,6 @@ class Player:
         self.q = q
         self.r = r
 
-    def move_player_to(self, q:int, r:int):
+    def move_player_to(self, q: int, r: int):
         self.q = q
         self.r = r
-    

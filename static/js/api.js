@@ -1,5 +1,3 @@
-import { state } from "./state.js";
-
 export async function fetchMap() {
     const response = await fetch("/api/map");
     return await response.json();
@@ -14,7 +12,6 @@ export async function createMap(width, height, hexSize) {
     const response = await fetch(`/api/newmap/${width}/${height}/${hexSize}`, {
         method: "POST"
     });
-
     return await response.json();
 }
 
@@ -22,7 +19,6 @@ export async function paintHexApi(q, r, terrainKey) {
     const response = await fetch(`/api/hex/${q}/${r}/${terrainKey}`, {
         method: "POST"
     });
-
     return await response.json();
 }
 
@@ -35,16 +31,13 @@ export async function paintHexesBatchApi(hexes, terrainKey) {
 
     const response = await fetch("/api/hex/paint", {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
+        headers: {"Content-Type": "application/json"},
         body: JSON.stringify(payload)
     });
-
     return await response.json();
 }
 
-export async function paintHexesBatchRadiusApi(hexes, terrainKey,radius) {
+export async function paintHexesBatchRadiusApi(hexes, terrainKey, radius) {
     const payload = hexes.map(hex => ({
         q: hex.q,
         r: hex.r,
@@ -52,12 +45,9 @@ export async function paintHexesBatchRadiusApi(hexes, terrainKey,radius) {
     }));
 
     const response = await fetch(`/api/hex/paintRadius?radius=${radius}`, {
-    method: "POST",
-    headers: {
-        "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-});
-
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+    });
     return await response.json();
 }

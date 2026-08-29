@@ -9,7 +9,6 @@
 <body>
     <header>
         <h1>Hexploration Editor</h1>
-        
     </header>
     <div id="canvas-section">
         <nav id="tool-bar">
@@ -18,9 +17,9 @@
             <button id="paint-map-btn">"Paint"</button>
             <button id="brush-btn">Brush</button>
             <button id="bucket_btn">Bucket</button>
-            <div class = "radius-slider-contener">
-                <input type = "range" min="1" max = "10" value = "1" class="slider" id="radius-slider">
-                <span id ="radius-slider-value"> 1 </span>
+            <div class="radius-slider-contener">
+                <input type="range" min="1" max="10" value="1" class="slider" id="radius-slider">
+                <span id="radius-slider-value">1</span>
             </div>
             <div id="terrain-buttons"></div>
         </nav>
@@ -28,21 +27,16 @@
         <div id="new-map-modal" class="modal hidden">
             <div class="modal-content">
                 <h2>New Map</h2>
-
                 <label>Width</label>
                 <input id="new-map-width" type="number" value="20">
-
                 <label>Height</label>
                 <input id="new-map-height" type="number" value="20">
-
                 <label>Hex size</label>
                 <input id="new-map-hex-size" type="number" value="32">
-
                 <button id="confirm-new-map-btn">Create</button>
                 <button id="cancel-new-map-btn">Cancel</button>
             </div>
         </div>
     </div>
-
 </body>
 </html>
