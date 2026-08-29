@@ -10,7 +10,12 @@ from dto.movement_dto import (
     MapSnapshotResponse,
     MovementResponse,
 )
-from services.errors import ConflictError, ForbiddenOperationError, NotFoundError
+from services.errors import (
+    ConflictError,
+    ForbiddenOperationError,
+    MovementBlockedError,
+    NotFoundError,
+)
 from services.expedition_movement_service import (
     ExpeditionMovementService,
     InvalidMovementError,
@@ -29,6 +34,8 @@ def _raise_http(exc: Exception) -> None:
         raise HTTPException(status_code=404, detail=str(exc))
     if isinstance(exc, ForbiddenOperationError):
         raise HTTPException(status_code=403, detail=str(exc))
+    if isinstance(exc, MovementBlockedError):
+        raise HTTPException(status_code=409, detail=exc.detail)
     if isinstance(exc, ConflictError):
         raise HTTPException(status_code=409, detail=str(exc))
     if isinstance(exc, InvalidMovementError):

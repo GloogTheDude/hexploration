@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 
 from sqlalchemy import (
@@ -50,7 +50,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     memberships: Mapped[list[CampaignMembership]] = relationship(back_populates="user")
     characters: Mapped[list[Character]] = relationship(back_populates="owner")
@@ -63,7 +63,7 @@ class Campaign(Base):
     name: Mapped[str] = mapped_column(String(160))
     description: Mapped[str | None] = mapped_column(Text())
     epoch_name: Mapped[str] = mapped_column(String(80), default="Day 1")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     memberships: Mapped[list[CampaignMembership]] = relationship(back_populates="campaign", cascade="all, delete-orphan")
     characters: Mapped[list[Character]] = relationship(back_populates="campaign", cascade="all, delete-orphan")
@@ -79,7 +79,7 @@ class CampaignMembership(Base):
     campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     role: Mapped[CampaignRole] = mapped_column(SAEnum(CampaignRole, name="campaign_role"))
-    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     campaign: Mapped[Campaign] = relationship(back_populates="memberships")
     user: Mapped[User] = relationship(back_populates="memberships")
@@ -118,7 +118,7 @@ class CharacterSheetVersion(Base):
     checksum_sha256: Mapped[str | None] = mapped_column(String(64))
     campaign_game_minute: Mapped[int | None] = mapped_column(BigInteger())
     expedition_id: Mapped[int | None] = mapped_column(ForeignKey("expeditions.id", ondelete="SET NULL"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     is_current: Mapped[bool] = mapped_column(Boolean(), default=True)
 
     character: Mapped[Character] = relationship(back_populates="sheets")
@@ -131,7 +131,7 @@ class WorldMap(Base):
     campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(160))
     description: Mapped[str | None] = mapped_column(Text())
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     campaign: Mapped[Campaign] = relationship(back_populates="maps")
     versions: Mapped[list[MapVersion]] = relationship(back_populates="map", cascade="all, delete-orphan")
@@ -150,10 +150,11 @@ class MapVersion(Base):
     height: Mapped[int] = mapped_column(Integer())
     hex_size: Mapped[int] = mapped_column(Integer(), default=32)
     effective_from_game_minute: Mapped[int] = mapped_column(BigInteger(), default=0, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     map: Mapped[WorldMap] = relationship(back_populates="versions")
     hexes: Mapped[list[MapHex]] = relationship(back_populates="map_version", cascade="all, delete-orphan")
+    edges: Mapped[list[MapEdge]] = relationship(back_populates="map_version", cascade="all, delete-orphan")
 
 
 class MapHex(Base):
@@ -171,6 +172,39 @@ class MapHex(Base):
 
     map_version: Mapped[MapVersion] = relationship(back_populates="hexes")
     pois: Mapped[list[PointOfInterest]] = relationship(back_populates="hex", cascade="all, delete-orphan")
+
+
+
+
+class MapEdge(Base):
+    __tablename__ = "map_edges"
+    __table_args__ = (
+        UniqueConstraint(
+            "map_version_id",
+            "from_q",
+            "from_r",
+            "to_q",
+            "to_r",
+            name="uq_map_edge_coordinates",
+        ),
+        CheckConstraint("feature_id > 0", name="ck_map_edge_feature_id_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    map_version_id: Mapped[int] = mapped_column(
+        ForeignKey("map_versions.id", ondelete="CASCADE"),
+        index=True,
+    )
+    from_q: Mapped[int] = mapped_column(Integer())
+    from_r: Mapped[int] = mapped_column(Integer())
+    to_q: Mapped[int] = mapped_column(Integer())
+    to_r: Mapped[int] = mapped_column(Integer())
+    feature_type: Mapped[str] = mapped_column(String(80), index=True)
+    feature_id: Mapped[int] = mapped_column(Integer(), index=True)
+    name: Mapped[str | None] = mapped_column(String(160))
+    extra_data: Mapped[dict] = mapped_column(JSON(), default=dict)
+
+    map_version: Mapped[MapVersion] = relationship(back_populates="edges")
 
 
 class PointOfInterest(Base):
@@ -205,7 +239,7 @@ class Expedition(Base):
     current_r: Mapped[int | None] = mapped_column(Integer())
     weather_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
     transport_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     campaign: Mapped[Campaign] = relationship(back_populates="expeditions")
     participants: Mapped[list[ExpeditionCharacter]] = relationship(back_populates="expedition", cascade="all, delete-orphan")
@@ -287,7 +321,7 @@ class DebriefAnswer(Base):
     question_id: Mapped[int] = mapped_column(ForeignKey("debrief_questions.id", ondelete="CASCADE"))
     character_id: Mapped[int] = mapped_column(ForeignKey("characters.id", ondelete="CASCADE"), index=True)
     answer: Mapped[str] = mapped_column(Text())
-    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
 class ExpeditionReport(Base):
@@ -298,7 +332,7 @@ class ExpeditionReport(Base):
     published_game_minute: Mapped[int] = mapped_column(BigInteger(), index=True)
     title: Mapped[str] = mapped_column(String(200))
     content: Mapped[str] = mapped_column(Text())
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
 class WikiPage(Base):
@@ -322,7 +356,7 @@ class WikiRevision(Base):
     effective_from_game_minute: Mapped[int] = mapped_column(BigInteger(), index=True)
     source_report_id: Mapped[int | None] = mapped_column(ForeignKey("expedition_reports.id", ondelete="SET NULL"))
     content: Mapped[str] = mapped_column(Text())
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
 class KnowledgeRecall(Base):

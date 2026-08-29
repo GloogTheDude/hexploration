@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexploration Timeline</title>
+    <link rel="stylesheet" href="/css/timeline.css">
+    <script type="module" src="/js/timeline.js"></script>
+</head>
+<body>
+    <header class="topbar">
+        <div>
+            <h1>Campaign Timeline</h1>
+            <p>Planifier et inspecter les événements du monde par temps de campagne.</p>
+        </div>
+        <a class="button-link" href="/">Map editor</a>
+    </header>
+
+    <main class="layout">
+        <section class="panel controls-panel">
+            <h2>Campagne</h2>
+            <div class="inline-fields">
+                <label>
+                    Campaign ID
+                    <input id="campaign-id" type="number" min="1" value="1">
+                </label>
+                <button id="load-btn" type="button">Charger</button>
+            </div>
+
+            <h2>Filtres</h2>
+            <div class="filter-grid">
+                <label>Depuis minute<input id="filter-from" type="number" min="0"></label>
+                <label>Jusqu'à minute<input id="filter-to" type="number" min="0"></label>
+                <label>Type<input id="filter-event-type" placeholder="WEATHER_CHANGED"></label>
+                <label>Target type<input id="filter-target-type" placeholder="POI"></label>
+                <label>Target ID<input id="filter-target-id" type="number" min="1"></label>
+            </div>
+            <div class="button-row">
+                <button id="apply-filters-btn" type="button">Appliquer</button>
+                <button id="clear-filters-btn" type="button" class="secondary">Effacer</button>
+            </div>
+
+            <h2>Inspecter le monde</h2>
+            <div class="inline-fields">
+                <label>
+                    Minute
+                    <input id="inspect-minute" type="number" min="0" value="0">
+                </label>
+                <button id="inspect-btn" type="button">Résoudre l'état</button>
+            </div>
+            <pre id="world-state" class="state-box">Aucun état chargé.</pre>
+        </section>
+
+        <section class="panel timeline-panel">
+            <div class="section-heading">
+                <div>
+                    <h2>Timeline</h2>
+                    <p id="timeline-summary">Charge une campagne pour afficher ses événements.</p>
+                </div>
+                <button id="new-event-btn" type="button">+ Événement</button>
+            </div>
+            <div id="timeline" class="timeline"></div>
+        </section>
+    </main>
+
+    <dialog id="event-dialog">
+        <form id="event-form" method="dialog">
+            <div class="dialog-heading">
+                <h2 id="dialog-title">Nouvel événement</h2>
+                <button id="close-dialog-btn" type="button" class="icon-btn" aria-label="Fermer">×</button>
+            </div>
+
+            <input id="event-id" type="hidden">
+
+            <fieldset>
+                <legend>Date de campagne</legend>
+                <div class="date-grid">
+                    <label>Jour<input id="event-day" type="number" min="1" value="1" required></label>
+                    <label>Heure<input id="event-hour" type="number" min="0" max="23" value="0" required></label>
+                    <label>Minute<input id="event-minute-part" type="number" min="0" max="59" value="0" required></label>
+                </div>
+                <div class="computed-minute">game_minute: <strong id="computed-game-minute">0</strong></div>
+            </fieldset>
+
+            <label>
+                Event type
+                <input id="event-type" required maxlength="120" placeholder="WEATHER_CHANGED">
+            </label>
+
+            <div class="date-grid">
+                <label>Expedition ID<input id="expedition-id" type="number" min="1"></label>
+                <label>Target type<input id="target-type" maxlength="80" placeholder="POI"></label>
+                <label>Target ID<input id="target-id" type="number" min="1"></label>
+            </div>
+
+            <label>
+                Payload JSON
+                <textarea id="payload" rows="8" spellcheck="false">{}</textarea>
+            </label>
+
+            <label>
+                Note MJ
+                <textarea id="dm-note" rows="3"></textarea>
+            </label>
+
+            <p id="form-error" class="error-message"></p>
+
+            <div class="dialog-actions">
+                <button id="delete-event-btn" type="button" class="danger hidden">Supprimer</button>
+                <span class="spacer"></span>
+                <button id="cancel-event-btn" type="button" class="secondary">Annuler</button>
+                <button type="submit">Enregistrer</button>
+            </div>
+        </form>
+    </dialog>
+
+    <div id="toast" class="toast hidden"></div>
+</body>
+</html>

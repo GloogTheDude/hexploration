@@ -1,0 +1,22 @@
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+from db.session import get_db
+from dto.poi_dto import POICreate, POIResponse, POITemporalStateResponse
+from services.errors import NotFoundError
+from services.poi_service import POIService
+router = APIRouter(tags=["points of interest"])
+@router.post("/api/pois", response_model=POIResponse, status_code=status.HTTP_201_CREATED)
+def create_poi(data: POICreate, db: Session=Depends(get_db)):
+    try: return POIService(db).create(data)
+    except NotFoundError as exc: raise HTTPException(404, str(exc)) from exc
+@router.get("/api/map-versions/{map_version_id}/pois", response_model=list[POIResponse])
+def list_pois(map_version_id:int, db:Session=Depends(get_db)): return POIService(db).list_for_map_version(map_version_id)
+@router.get("/api/pois/{poi_id}", response_model=POIResponse)
+def get_poi(poi_id:int, db:Session=Depends(get_db)):
+    try: return POIService(db).get(poi_id)
+    except NotFoundError as exc: raise HTTPException(404, str(exc)) from exc
+@router.get("/api/campaigns/{campaign_id}/pois/{poi_id}/state", response_model=POITemporalStateResponse)
+def poi_state(campaign_id:int, poi_id:int, game_minute:int=Query(ge=0), db:Session=Depends(get_db)):
+    try: s=POIService(db).state_at(poi_id,campaign_id=campaign_id,game_minute=game_minute)
+    except NotFoundError as exc: raise HTTPException(404,str(exc)) from exc
+    return {"poi":s.poi,"game_minute":s.game_minute,"state":s.state,"exists":s.exists,"latest_event": None if s.latest_event is None else {"id":s.latest_event.id,"event_type":s.latest_event.event_type,"game_minute":s.latest_event.game_minute,"payload":s.latest_event.payload}}

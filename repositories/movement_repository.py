@@ -7,6 +7,7 @@ from db.models import (
     Character,
     Expedition,
     ExpeditionCharacter,
+    MapEdge,
     MapHex,
     MapVersion,
     Movement,
@@ -37,6 +38,31 @@ class MovementRepository:
             MapHex.map_version_id == map_version_id,
             MapHex.q == q,
             MapHex.r == r,
+        )
+        return self.db.scalar(stmt)
+
+
+    def get_edge_between(
+        self,
+        map_version_id: int,
+        q1: int,
+        r1: int,
+        q2: int,
+        r2: int,
+    ) -> MapEdge | None:
+        a = (q1, r1)
+        b = (q2, r2)
+        if a <= b:
+            from_q, from_r, to_q, to_r = q1, r1, q2, r2
+        else:
+            from_q, from_r, to_q, to_r = q2, r2, q1, r1
+
+        stmt = select(MapEdge).where(
+            MapEdge.map_version_id == map_version_id,
+            MapEdge.from_q == from_q,
+            MapEdge.from_r == from_r,
+            MapEdge.to_q == to_q,
+            MapEdge.to_r == to_r,
         )
         return self.db.scalar(stmt)
 

@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: hexploration
       POSTGRES_USER: hexploration
-      POSTGRES_PASSWORD: hexploration_password
+      POSTGRES_PASSWORD: hexploration
     ports:
       - "5435:5432"
     volumes:

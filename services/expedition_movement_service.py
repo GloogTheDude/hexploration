@@ -5,8 +5,14 @@ from sqlalchemy.orm import Session
 from db.models import ExpeditionStatus, Movement
 from dto.movement_dto import ExpeditionPositionSet
 from repositories.movement_repository import MovementRepository
-from services.errors import ConflictError, ForbiddenOperationError, NotFoundError
+from services.errors import (
+    ConflictError,
+    ForbiddenOperationError,
+    MovementBlockedError,
+    NotFoundError,
+)
 from services.movement_cost_service import MovementCostService
+from services.world_event_service import WorldEventService
 
 
 class InvalidMovementError(Exception):
@@ -26,6 +32,7 @@ class ExpeditionMovementService:
         self.db = db
         self.repo = MovementRepository(db)
         self.costs = MovementCostService()
+        self.world_events = WorldEventService(db)
 
     def set_position(
         self,
@@ -119,15 +126,54 @@ class ExpeditionMovementService:
         if source is None:
             raise ConflictError("Current expedition hex no longer exists")
 
+        departure = expedition.current_game_minute
+
+        # An edge represents a spatial feature between two adjacent hexes.
+        # Its traversability is resolved from WorldEvent at the expedition's
+        # own departure minute. The same bridge can therefore be destroyed for
+        # one expedition and already repaired for another expedition later in
+        # the campaign timeline.
+        edge = self.repo.get_edge_between(
+            expedition.current_map_version_id,
+            expedition.current_q,
+            expedition.current_r,
+            to_q,
+            to_r,
+        )
+        if edge is not None:
+            traversal = self.world_events.traversal_state_for_target(
+                expedition.campaign_id,
+                game_minute=departure,
+                target_type=edge.feature_type,
+                target_id=edge.feature_id,
+            )
+            if not traversal.allowed and traversal.event is not None:
+                raise MovementBlockedError(
+                    reason=traversal.event.event_type,
+                    target_type=edge.feature_type,
+                    target_id=edge.feature_id,
+                    edge_id=edge.id,
+                    game_minute=departure,
+                    world_event_id=traversal.event.id,
+                )
+
+        # Weather is world truth and therefore resolved at the expedition's
+        # own in-world clock. An expedition at minute 150 can see RAIN while
+        # another expedition at minute 350 sees a later STORM event.
+        weather_key = self.world_events.weather_at(
+            expedition.campaign_id,
+            departure,
+        )
+
+        # Transport remains party state rather than world state.
         cost = self.costs.calculate(
             campaign_id=expedition.campaign_id,
             destination=destination,
             base_duration_minutes=base_duration_minutes,
-            weather_key=expedition.weather_key,
+            weather_key=weather_key,
             transport_key=expedition.transport_key,
         )
 
-        departure = expedition.current_game_minute
         arrival = departure + cost.effective_duration_minutes
 
         movement = Movement(
