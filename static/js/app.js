@@ -1,9 +1,9 @@
-import { state } from "./state.js?v=303";
-import { fetchMap, fetchTerrains, createMap } from "./api.js?v=303";
-import { drawMap, requestMapDraw, resizeCanvasToDisplaySize } from "./renderer.js?v=303";
-import { createTerrainButtons } from "./ui.js?v=303";
-import { mouseToHex, paintHexesBatchRadius, flushPendingPaint } from "./tools.js?v=303";
-import { axialToPixel, getHexLine } from "./hex_math.js?v=303";
+import { state } from "./state.js?v=320";
+import { fetchMap, fetchTerrains, createMap } from "./api.js?v=320";
+import { drawMap, requestMapDraw, resizeCanvasToDisplaySize } from "./renderer.js?v=320";
+import { createTerrainButtons } from "./ui.js?v=320";
+import { mouseToHex, paintHexesBatchRadius, flushPendingPaint, beginPaintStroke, endPaintStroke, undoPaint, redoPaint, clearPaintHistory } from "./tools.js?v=320";
+import { axialToPixel, getHexLine } from "./hex_math.js?v=320";
 
 const $ = (s) => document.querySelector(s);
 const canvas = $("#hex-canvas");
@@ -23,6 +23,7 @@ const fitMapBtn = $("#fit-map-btn");
 const zoomLabel = $("#zoom-label");
 const mapSummary = $("#map-summary");
 const canvasHint = $("#canvas-hint");
+const poiOverlayBtn = $("#toggle-poi-overlay");
 
 const params = new URL(location.href).searchParams;
 const editorUserId = Number(params.get("user"));
@@ -37,6 +38,7 @@ const campaignSavePanel = $("#campaign-save-panel");
 const campaignNameLabel = $("#editor-campaign-name");
 const campaignContextLabel = $("#editor-campaign-context");
 const editorDmLink = $("#editor-dm-link");
+const editorWorldLink = $("#editor-world-link");
 const persistedVersionSelect = $("#persisted-version-select");
 const loadPersistedBtn = $("#load-persisted-btn");
 const persistMapBtn = $("#persist-map-btn");
@@ -57,8 +59,28 @@ function updateMapSummary() {
   const logical = state.map?.width && state.map?.height ? state.map.width * state.map.height : 0;
   mapSummary.textContent = logical ? `${state.map.width}×${state.map.height} · ${logical.toLocaleString("fr-FR")} hex logiques · ${materialized.toLocaleString("fr-FR")} modifiés` : "Aucune carte chargée";
   canvasHint.textContent = state.isBrushOn
-    ? "Clique/glisse pour peindre · maintiens Espace pour déplacer la carte."
+    ? "Clique/glisse pour peindre · Ctrl+Z annule · Ctrl+Shift+Z rétablit · Espace déplace."
     : "Molette pour zoomer · glisser pour déplacer · Espace = déplacement temporaire.";
+}
+
+
+async function refreshPoiOverlay() {
+  state.editorPois = [];
+  if (!editorCampaignId || !editorUserId || !editorVersionId) { redraw(); return; }
+  try {
+    const workbench = await fetchJson(`/api/campaigns/${editorCampaignId}/dm-map-workbench?user_id=${editorUserId}&map_version_id=${editorVersionId}`);
+    state.editorPois = workbench.pois || [];
+  } catch (_) {
+    state.editorPois = [];
+  }
+  redraw();
+}
+
+function updatePoiOverlayButton() {
+  if (!poiOverlayBtn) return;
+  poiOverlayBtn.setAttribute("aria-pressed", String(state.showPoiOverlay));
+  poiOverlayBtn.classList.toggle("active", state.showPoiOverlay);
+  poiOverlayBtn.textContent = state.showPoiOverlay ? "POI ✓" : "POI";
 }
 
 function canvasPixelRatio() {
@@ -174,6 +196,13 @@ function updateUrlContext() {
   editorMapId ? url.searchParams.set("map", editorMapId) : url.searchParams.delete("map");
   editorVersionId ? url.searchParams.set("version", editorVersionId) : url.searchParams.delete("version");
   history.replaceState(null, "", url);
+  if (editorWorldLink) {
+    const world = new URL("/world.html", location.origin);
+    if (editorUserId) world.searchParams.set("user", editorUserId);
+    if (editorCampaignId) world.searchParams.set("campaign", editorCampaignId);
+    if (editorVersionId) world.searchParams.set("version", editorVersionId);
+    editorWorldLink.href = world.pathname + world.search;
+  }
 }
 
 async function fetchJson(url, options = {}) {
@@ -216,6 +245,7 @@ async function loadPersistedVersion(versionId = null) {
   try {
     const body = await fetchJson(`/api/campaigns/${editorCampaignId}/dm-map-versions/${selectedVersionId}/load-editor?user_id=${editorUserId}`, { method: "POST" });
     state.map = await fetchMap();
+    clearPaintHistory();
     editorMapId = mapId;
     editorVersionId = selectedVersionId;
     loadedVersionNumber = Number(body.version);
@@ -226,6 +256,7 @@ async function loadPersistedVersion(versionId = null) {
     campaignContextLabel.textContent = `Map #${mapId} · v${body.version} (#${body.map_version_id})`;
     updateUrlContext();
     setSaveModeUI();
+    await refreshPoiOverlay();
     resetViewOneToOne();
     setMessage(`${body.hex_count} hex chargés. Tu peux mettre à jour cette version ou en créer une nouvelle.`);
   } catch (error) { setMessage(error.message, true); }
@@ -235,6 +266,7 @@ async function initCampaignContext() {
   if (!editorCampaignId || !editorUserId) return;
   campaignSavePanel.classList.remove("hidden");
   editorDmLink.href = `/dm.html?user=${editorUserId}&campaign=${editorCampaignId}`;
+  updateUrlContext();
   try {
     const campaign = await fetchJson(`/api/campaigns/${editorCampaignId}`);
     campaignNameLabel.textContent = campaign.name;
@@ -258,6 +290,7 @@ async function createNewMap(event) {
   try {
     await flushPendingPaint();
     state.map = await createMap(width, height, hexSize);
+    clearPaintHistory();
   } catch (error) {
     setMessage(error.message, true);
     return;
@@ -267,6 +300,7 @@ async function createNewMap(event) {
   }
   editorMapId = null;
   editorVersionId = null;
+  state.editorPois = [];
   loadedVersionNumber = null;
   persistMapName.disabled = false;
   persistMapName.value = "Carte principale";
@@ -285,6 +319,7 @@ async function reloadDraft() {
   try {
     await flushPendingPaint();
     state.map = await fetchMap();
+    clearPaintHistory();
     redraw();
   } catch (error) { setMessage(error.message, true); }
 }
@@ -346,6 +381,7 @@ async function persistEditorMap() {
       persistVersionName.value = selected.dataset.versionName || persistVersionName.value;
     }
     setSaveModeUI();
+    await refreshPoiOverlay();
   } catch (error) {
     const suffix = mode === "update" && /history|version/i.test(error.message) ? " — Utilise ‘Créer une nouvelle version’." : "";
     setMessage(error.message + suffix, true);
@@ -367,6 +403,7 @@ function onPointerDown(event) {
   }
   if (state.isBrushOn && event.button === 0) {
     state.isPainting = true;
+    beginPaintStroke();
     const hex = mouseToHex(canvas, event);
     paintHexesBatchRadius(canvas, [hex]);
     state.lastPaintedHex = hex;
@@ -430,6 +467,7 @@ function stopPointer(event) {
   canvas.classList.remove("panning");
   if (event?.pointerId != null) canvas.releasePointerCapture?.(event.pointerId);
   if (finishedPainting) {
+    endPaintStroke();
     // Rebuild outlines/LOD once, after the interactive stroke, then synchronize
     // the sparse changes without blocking pointer movement.
     redraw();
@@ -457,11 +495,29 @@ function setSpacePanning(active) {
     pendingPaintEvent = null;
     state.isPainting = false;
     state.lastPaintedHex = null;
+    endPaintStroke();
+    redraw();
+    flushPendingPaint().catch(error => setMessage(error.message, true));
   }
 }
 
-window.addEventListener("keydown", event => {
-  if (event.code !== "Space" || isTypingTarget(event.target)) return;
+window.addEventListener("keydown", async event => {
+  if (isTypingTarget(event.target)) return;
+  const mod = event.ctrlKey || event.metaKey;
+  if (mod && event.key.toLowerCase() === "z") {
+    event.preventDefault();
+    try {
+      const changed = event.shiftKey ? await redoPaint() : await undoPaint();
+      if (changed) {
+        redraw();
+        setMessage(event.shiftKey ? "Rétabli." : "Annulé.");
+      } else {
+        setMessage(event.shiftKey ? "Rien à rétablir." : "Rien à annuler.");
+      }
+    } catch (error) { setMessage(error.message, true); }
+    return;
+  }
+  if (event.code !== "Space") return;
   event.preventDefault();
   setSpacePanning(true);
 });
@@ -490,6 +546,7 @@ radiusSlider.addEventListener("input", () => { state.brushRadius = Number(radius
 zoomInBtn.addEventListener("click", () => zoomAt(1.2));
 zoomOutBtn.addEventListener("click", () => zoomAt(.83));
 fitMapBtn.addEventListener("click", fitMap);
+poiOverlayBtn?.addEventListener("click", () => { state.showPoiOverlay = !state.showPoiOverlay; updatePoiOverlayButton(); redraw(); });
 loadPersistedBtn?.addEventListener("click", () => loadPersistedVersion());
 persistMapBtn?.addEventListener("click", persistEditorMap);
 document.querySelectorAll('input[name="save-mode"]').forEach(input => input.addEventListener("change", setSaveModeUI));
@@ -505,6 +562,7 @@ window.addEventListener("resize", redraw);
     state.map = await fetchMap();
     setBrush(false);
     setSaveModeUI();
+    updatePoiOverlayButton();
     await initCampaignContext();
     if (!editorVersionId && state.map?.hexes) resetViewOneToOne();
     else redraw();

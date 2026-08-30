@@ -1,13 +1,15 @@
-import { state } from "./state.js?v=303";
-import { pixelToAxial } from "./hex_math.js?v=303";
-import { paintHexesBatchRadiusApi } from "./api.js?v=303";
-import { drawPaintPreview, drawBrushSegmentPreview, mapScreenCenter } from "./renderer.js?v=303";
+import { state } from "./state.js?v=320";
+import { pixelToAxial } from "./hex_math.js?v=320";
+import { paintHexesBatchRadiusApi, paintHexesExactApi } from "./api.js?v=320";
+import { drawPaintPreview, drawBrushSegmentPreview, mapScreenCenter } from "./renderer.js?v=320";
 
 const pendingCenters = new Map();
 let syncTimer = null;
 let inflight = Promise.resolve();
 const SYNC_AFTER_STROKE_MS = 180;
 const MAX_PENDING_CENTERS = 2500;
+const MAX_HISTORY = 100;
+let activeStrokeBefore = null;
 
 export function mouseToHex(canvas, event) {
   const rect = canvas.getBoundingClientRect();
@@ -55,8 +57,79 @@ function localCoordsInRadius(center, radius) {
   return out;
 }
 
+function cloneTile(tile) {
+  if (!tile) return null;
+  return { ...tile, terrain: tile.terrain ? { ...tile.terrain } : null, pois: [...(tile.pois || [])] };
+}
+
+function terrainKeyForTile(tile) {
+  if (!tile) return state.map.default_terrain_key || "SEA";
+  for (const [key, terrain] of Object.entries(state.terrains || {})) {
+    if (tile.terrain?.type === terrain.type) return key;
+  }
+  return state.map.default_terrain_key || "SEA";
+}
+
+export function beginPaintStroke() {
+  activeStrokeBefore = new Map();
+}
+
+export function endPaintStroke() {
+  if (!activeStrokeBefore) return false;
+  const before = [];
+  const after = [];
+  for (const [key, oldTile] of activeStrokeBefore.entries()) {
+    const [q, r] = key.split(",").map(Number);
+    before.push({ q, r, tile: cloneTile(oldTile) });
+    after.push({ q, r, tile: cloneTile(state.map.hexes[key] || null) });
+  }
+  activeStrokeBefore = null;
+  if (!before.length) return false;
+  state.undoStack.push({ before, after });
+  if (state.undoStack.length > MAX_HISTORY) state.undoStack.shift();
+  state.redoStack = [];
+  return true;
+}
+
+async function applyHistorySnapshot(snapshot) {
+  await flushPendingPaint();
+  const payload = [];
+  for (const item of snapshot) {
+    const key = `${item.q},${item.r}`;
+    if (item.tile) state.map.hexes[key] = cloneTile(item.tile);
+    else delete state.map.hexes[key];
+    payload.push({ q: item.q, r: item.r, terrain_key: terrainKeyForTile(item.tile) });
+  }
+  await paintHexesExactApi(payload);
+}
+
+export async function undoPaint() {
+  const command = state.undoStack.pop();
+  if (!command) return false;
+  await applyHistorySnapshot(command.before);
+  state.redoStack.push(command);
+  return true;
+}
+
+export async function redoPaint() {
+  const command = state.redoStack.pop();
+  if (!command) return false;
+  await applyHistorySnapshot(command.after);
+  state.undoStack.push(command);
+  return true;
+}
+
+export function clearPaintHistory() {
+  state.undoStack = [];
+  state.redoStack = [];
+  activeStrokeBefore = null;
+}
+
 function applyLocalTerrain(q, r, terrain) {
   const key = `${q},${r}`;
+  if (activeStrokeBefore && !activeStrokeBefore.has(key)) {
+    activeStrokeBefore.set(key, cloneTile(state.map.hexes[key] || null));
+  }
   const defaultKey = state.map.default_terrain_key || "SEA";
   if (state.selectedTerrainKey === defaultKey) {
     delete state.map.hexes[key];

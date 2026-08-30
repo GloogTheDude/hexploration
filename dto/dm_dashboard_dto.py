@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
+from typing import Any
 
 from db.models import CampaignRole, CharacterStatus, ExpeditionStatus
 
@@ -207,7 +208,17 @@ class DMEdgeWorkbench(BaseModel):
     to_r: int
     feature_type: str
     feature_id: int
+    segment_index: int = 0
     name: str | None
+    extra_data: dict[str, Any]
+
+
+class DMAreaWorkbench(BaseModel):
+    id: int
+    feature_type: str
+    feature_id: int
+    name: str | None
+    cells: list[dict[str, int]]
     extra_data: dict[str, Any]
 
 
@@ -226,11 +237,14 @@ class DMMapWorkbenchResponse(BaseModel):
     hexes: list[DMMapHexWorkbench]
     pois: list[DMPOIWorkbench]
     edges: list[DMEdgeWorkbench]
+    areas: list[DMAreaWorkbench] = Field(default_factory=list)
 
 
 class DMPOICreate(BaseModel):
     q: int
     r: int
+    feature_id: int | None = Field(default=None, gt=0)
+    creation_game_minute: int = Field(default=0, ge=0)
     name: str = Field(min_length=1, max_length=160)
     kind: str | None = Field(default=None, max_length=80)
     dm_description: str | None = None
@@ -259,3 +273,50 @@ class DMTargetWorldEventCreate(BaseModel):
     event_type: str = Field(min_length=1, max_length=120)
     payload: dict[str, Any] = Field(default_factory=dict)
     dm_note: str | None = None
+
+
+class DMHexCoord(BaseModel):
+    q: int
+    r: int
+
+
+class DMLinearFeatureCreate(BaseModel):
+    waypoints: list[DMHexCoord] = Field(min_length=2)
+    feature_type: str = Field(min_length=1, max_length=80)
+    name: str | None = Field(default=None, max_length=160)
+    extra_data: dict[str, Any] = Field(default_factory=dict)
+
+
+
+
+class DMWorldEditorSnapshot(BaseModel):
+    map_version_id: int
+    features: list[dict[str, Any]] = Field(default_factory=list)
+    pois: list[dict[str, Any]] = Field(default_factory=list)
+    edges: list[dict[str, Any]] = Field(default_factory=list)
+    areas: list[dict[str, Any]] = Field(default_factory=list)
+    events: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class DMHexFeatureClear(BaseModel):
+    q: int
+    r: int
+
+
+class DMLinearFeatureUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=160)
+
+
+class DMAreaFeatureUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=160)
+
+
+class DMLinearFeatureMerge(BaseModel):
+    edge_ids: list[int] = Field(min_length=2)
+
+
+class DMAreaFeatureCreate(BaseModel):
+    cells: list[DMHexCoord] = Field(min_length=1)
+    feature_type: str = Field(min_length=1, max_length=80)
+    name: str | None = Field(default=None, max_length=160)
+    extra_data: dict[str, Any] = Field(default_factory=dict)

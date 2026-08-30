@@ -12,4 +12,4 @@ def test_brush_hot_path_is_incremental_and_sync_is_deferred():
     assert "MAX_PENDING_CENTERS" in tools
     assert "export function drawPaintPreview" in renderer
     assert "flushPendingPaint().catch" in app
-    assert "?v=303" in app
+    assert "?v=320" in app

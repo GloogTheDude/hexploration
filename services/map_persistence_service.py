@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from sqlalchemy import func, insert, select, tuple_, update
+from sqlalchemy import delete, func, insert, select, tuple_, update
 from sqlalchemy.orm import Session
 
 from db.models import (
-    Campaign, CharacterMapHexObservation, Expedition, MapEdge, MapHex, MapVersion,
+    Campaign, CharacterMapHexObservation, Expedition, MapArea, MapEdge, MapHex, MapVersion,
     Movement, PointOfInterest, WorldMap,
 )
 from models.constants import BASE_TERRAINS
@@ -294,9 +294,22 @@ class MapPersistenceService:
                 to_r=edge.to_r,
                 feature_type=edge.feature_type,
                 feature_id=edge.feature_id,
+                segment_index=edge.segment_index,
                 name=edge.name,
                 extra_data=dict(edge.extra_data or {}),
             ))
+
+        parent_areas = list(self.db.scalars(select(MapArea).where(MapArea.map_version_id == parent.id)))
+        for area in parent_areas:
+            valid_cells = []
+            for cell in area.cells or []:
+                q, r = int(cell["q"]), int(cell["r"])
+                if editor_map.get_hex(q, r) is None:
+                    self.db.rollback()
+                    raise ConflictError(f"Cannot remove a cell of {area.feature_type} #{area.feature_id}")
+                valid_cells.append({"q": q, "r": r})
+            self.features.ensure(campaign_id=world_map.campaign_id, map_id=world_map.id, feature_type=area.feature_type, feature_id=area.feature_id)
+            self.db.add(MapArea(map_version_id=version.id, feature_type=area.feature_type, feature_id=area.feature_id, name=area.name, cells=valid_cells, extra_data=dict(area.extra_data or {})))
 
         self.db.commit()
         self.db.refresh(version)
@@ -352,18 +365,26 @@ class MapPersistenceService:
             ids = {(q, r): row_id for row_id, q, r in rows}
             updates: list[dict] = []
             inserts: list[dict] = []
+            deletes: list[int] = []
             for coord in dirty:
-                editor_hex = editor_map.get_hex(*coord)
+                row_id = ids.get(coord)
+                editor_hex = editor_map.hexes.get(f"{coord[0]},{coord[1]}")
                 if editor_hex is None:
+                    # Sparse/default terrain is represented by absence, not by a
+                    # materialized default row. This also makes Ctrl+Z restore
+                    # sparsity when a painted cell is undone back to default.
+                    if row_id is not None:
+                        deletes.append(row_id)
                     continue
                 payload = self._hex_payload(version.id, editor_hex)
-                row_id = ids.get(coord)
                 if row_id is None:
                     inserts.append(payload)
                 else:
                     payload.pop("map_version_id", None)
                     payload["id"] = row_id
                     updates.append(payload)
+            if deletes:
+                self.db.execute(delete(MapHex).where(MapHex.id.in_(deletes)))
             if updates:
                 self.db.execute(update(MapHex), updates)
             if inserts:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from db.models import MapEdge, MapFeature, MapHex, MapVersion, PointOfInterest, WorldMap
+from db.models import MapArea, MapEdge, MapFeature, MapHex, MapVersion, PointOfInterest, WorldMap
 from services.errors import NotFoundError
 
 
@@ -83,7 +83,7 @@ class MapFeatureService:
                 .where(WorldMap.campaign_id == campaign_id)
             ) or 0
         else:
-            concrete_max = self.db.scalar(
+            edge_max = self.db.scalar(
                 select(func.max(MapEdge.feature_id))
                 .join(MapVersion, MapEdge.map_version_id == MapVersion.id)
                 .join(WorldMap, MapVersion.map_id == WorldMap.id)
@@ -92,6 +92,16 @@ class MapFeatureService:
                     MapEdge.feature_type == feature_type,
                 )
             ) or 0
+            area_max = self.db.scalar(
+                select(func.max(MapArea.feature_id))
+                .join(MapVersion, MapArea.map_version_id == MapVersion.id)
+                .join(WorldMap, MapVersion.map_id == WorldMap.id)
+                .where(
+                    WorldMap.campaign_id == campaign_id,
+                    MapArea.feature_type == feature_type,
+                )
+            ) or 0
+            concrete_max = max(edge_max, area_max)
         max_id = max(registry_max, concrete_max)
         return self.ensure(
             campaign_id=campaign_id,

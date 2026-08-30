@@ -42,6 +42,34 @@ class MovementRepository:
         return self.db.scalar(stmt)
 
 
+    def get_edges_between(
+        self,
+        map_version_id: int,
+        q1: int,
+        r1: int,
+        q2: int,
+        r2: int,
+    ) -> list[MapEdge]:
+        a = (q1, r1)
+        b = (q2, r2)
+        if a <= b:
+            from_q, from_r, to_q, to_r = q1, r1, q2, r2
+        else:
+            from_q, from_r, to_q, to_r = q2, r2, q1, r1
+
+        stmt = (
+            select(MapEdge)
+            .where(
+                MapEdge.map_version_id == map_version_id,
+                MapEdge.from_q == from_q,
+                MapEdge.from_r == from_r,
+                MapEdge.to_q == to_q,
+                MapEdge.to_r == to_r,
+            )
+            .order_by(MapEdge.feature_type, MapEdge.feature_id, MapEdge.segment_index, MapEdge.id)
+        )
+        return list(self.db.scalars(stmt))
+
     def get_edge_between(
         self,
         map_version_id: int,
@@ -50,21 +78,10 @@ class MovementRepository:
         q2: int,
         r2: int,
     ) -> MapEdge | None:
-        a = (q1, r1)
-        b = (q2, r2)
-        if a <= b:
-            from_q, from_r, to_q, to_r = q1, r1, q2, r2
-        else:
-            from_q, from_r, to_q, to_r = q2, r2, q1, r1
-
-        stmt = select(MapEdge).where(
-            MapEdge.map_version_id == map_version_id,
-            MapEdge.from_q == from_q,
-            MapEdge.from_r == from_r,
-            MapEdge.to_q == to_q,
-            MapEdge.to_r == to_r,
-        )
-        return self.db.scalar(stmt)
+        # Compatibility helper for older callers; overlapping semantic features
+        # are represented by get_edges_between().
+        edges = self.get_edges_between(map_version_id, q1, r1, q2, r2)
+        return edges[0] if edges else None
 
     def add_movement(self, movement: Movement) -> Movement:
         self.db.add(movement)

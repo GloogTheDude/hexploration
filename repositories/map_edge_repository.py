@@ -47,6 +47,9 @@ class MapEdgeRepository:
         r1: int,
         q2: int,
         r2: int,
+        *,
+        feature_type: str | None = None,
+        feature_id: int | None = None,
     ) -> MapEdge | None:
         from_q, from_r, to_q, to_r = canonical_edge_coordinates(
             q1, r1, q2, r2
@@ -58,6 +61,10 @@ class MapEdgeRepository:
             MapEdge.to_q == to_q,
             MapEdge.to_r == to_r,
         )
+        if feature_type is not None:
+            stmt = stmt.where(MapEdge.feature_type == feature_type.strip().upper())
+        if feature_id is not None:
+            stmt = stmt.where(MapEdge.feature_id == feature_id)
         return self.db.scalar(stmt)
 
     def list_for_map_version(self, map_version_id: int) -> list[MapEdge]:

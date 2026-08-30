@@ -201,6 +201,11 @@ class MapFeature(Base):
     )
     feature_type: Mapped[str] = mapped_column(String(80), index=True)
     feature_id: Mapped[int] = mapped_column(Integer(), index=True)
+    # Directed semantic link used by river networks. Tributaries keep their own
+    # stable identity and terminate at the confluence instead of duplicating the
+    # downstream geometry.
+    downstream_feature_type: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    downstream_feature_id: Mapped[int | None] = mapped_column(Integer(), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
@@ -229,6 +234,7 @@ class MapVersion(Base):
     map: Mapped[WorldMap] = relationship(back_populates="versions")
     hexes: Mapped[list[MapHex]] = relationship(back_populates="map_version", cascade="all, delete-orphan")
     edges: Mapped[list[MapEdge]] = relationship(back_populates="map_version", cascade="all, delete-orphan")
+    areas: Mapped[list[MapArea]] = relationship(back_populates="map_version", cascade="all, delete-orphan")
 
 
 class MapHex(Base):
@@ -260,7 +266,9 @@ class MapEdge(Base):
             "from_r",
             "to_q",
             "to_r",
-            name="uq_map_edge_coordinates",
+            "feature_type",
+            "feature_id",
+            name="uq_map_edge_feature_coordinates",
         ),
         CheckConstraint("feature_id > 0", name="ck_map_edge_feature_id_positive"),
     )
@@ -276,10 +284,35 @@ class MapEdge(Base):
     to_r: Mapped[int] = mapped_column(Integer())
     feature_type: Mapped[str] = mapped_column(String(80), index=True)
     feature_id: Mapped[int] = mapped_column(Integer(), index=True)
+    segment_index: Mapped[int] = mapped_column(Integer(), default=0)
     name: Mapped[str | None] = mapped_column(String(160))
     extra_data: Mapped[dict] = mapped_column(JSON(), default=dict)
 
     map_version: Mapped[MapVersion] = relationship(back_populates="edges")
+
+
+class MapArea(Base):
+    """Semantic area feature represented by an ordered set of map cells.
+
+    The stable identity is (feature_type, feature_id); ``cells`` is only the
+    concrete geometry for this MapVersion.
+    """
+
+    __tablename__ = "map_areas"
+    __table_args__ = (
+        UniqueConstraint("map_version_id", "feature_type", "feature_id", name="uq_map_area_feature"),
+        CheckConstraint("feature_id > 0", name="ck_map_area_feature_id_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    map_version_id: Mapped[int] = mapped_column(ForeignKey("map_versions.id", ondelete="CASCADE"), index=True)
+    feature_type: Mapped[str] = mapped_column(String(80), index=True)
+    feature_id: Mapped[int] = mapped_column(Integer(), index=True)
+    name: Mapped[str | None] = mapped_column(String(160))
+    cells: Mapped[list] = mapped_column(JSON(), default=list)
+    extra_data: Mapped[dict] = mapped_column(JSON(), default=dict)
+
+    map_version: Mapped[MapVersion] = relationship(back_populates="areas")
 
 
 class PointOfInterest(Base):

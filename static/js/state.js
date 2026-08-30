@@ -9,5 +9,9 @@ export const state = {
   panMoved: false,
   lastPaintedHex: null,
   brushRadius: 1,
+  undoStack: [],
+  redoStack: [],
+  editorPois: [],
+  showPoiOverlay: true,
   view: { scale: 1, panX: 0, panY: 0 },
 };

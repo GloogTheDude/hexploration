@@ -51,3 +51,13 @@ export async function paintHexesBatchRadiusApi(hexes, terrainKey, radius) {
     });
     return await response.json();
 }
+
+export async function paintHexesExactApi(hexes) {
+    const response = await fetch("/api/hex/paintExact", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(hexes)
+    });
+    if (!response.ok) throw new Error(`Exact paint failed: ${response.status}`);
+    return await response.json();
+}

@@ -138,14 +138,17 @@ class ExpeditionMovementService:
         # own departure minute. The same bridge can therefore be destroyed for
         # one expedition and already repaired for another expedition later in
         # the campaign timeline.
-        edge = self.repo.get_edge_between(
+        edges = self.repo.get_edges_between(
             expedition.current_map_version_id,
             expedition.current_q,
             expedition.current_r,
             to_q,
             to_r,
         )
-        if edge is not None:
+        # A corridor may carry several independent semantic layers (ROAD +
+        # RIVER + BRIDGE...). A blocked layer must not be hidden by whichever
+        # row happens to be returned first by the database.
+        for edge in edges:
             traversal = self.world_events.traversal_state_for_target(
                 expedition.campaign_id,
                 game_minute=departure,

@@ -55,7 +55,7 @@ def test_dm_dashboard_exposes_visual_map_feature_workbench():
         assert marker in html
     assert "/dm-map-workbench?user_id=" in js
     assert "/dm-map-versions/${state.mapWorkbench.map_version_id}/pois" in js
-    assert "/dm-map-versions/${state.mapWorkbench.map_version_id}/edges" in js
+    assert "/dm-map-versions/${state.mapWorkbench.map_version_id}/linear-features" in js
     assert "/world-events?user_id=" in js
 
 
@@ -73,7 +73,9 @@ def test_dm_dashboard_bootstraps_members_characters_and_campaign_editor():
 
 def test_dm_map_versions_link_to_version_editor_without_internal_id_hunting():
     js = JS.read_text(encoding="utf-8")
-    assert 'Éditer → nouvelle version' in js
+    assert 'href="/world.html?user=${state.userId}&campaign=${state.campaignId}&version=${v.id}"' in js
+    assert '>Terrain</a>' in js
+    assert '>Monde</a>' in js
     assert '&map=${m.id}&version=${v.id}' in js
     assert 'identité POI #${p.feature_id}' in js
 
@@ -96,3 +98,18 @@ def test_dm_dashboard_can_update_and_delete_selected_campaign():
     assert "method: 'PATCH'" in js
     assert "method: 'DELETE'" in js
     assert 'Tape exactement le nom de la campagne' in js
+
+
+def test_dm_workbench_supports_multi_hex_selection_and_escape_clear():
+    html = HTML.read_text(encoding="utf-8")
+    js = JS.read_text(encoding="utf-8")
+    assert "Ctrl+clic" in html
+    assert "Esc: effacer" in html
+    assert "selectedHexes: []" in js
+    assert "additive:e.ctrlKey||e.metaKey" in js
+    assert "e.key!=='Escape'" in js
+    assert "clearHexSelection()" in js
+    assert "selected.length<2" in js
+    assert "waypoints:selected.map" in js
+    assert "exige exactement deux hex adjacents" in js
+    assert "RIVER" in js

@@ -12,6 +12,8 @@ from services.movement_modifiers import get_weather_modifier
 
 
 WEATHER_CHANGED = "WEATHER_CHANGED"
+POI_STATE_CHANGED = "POI_STATE_CHANGED"
+POI_VISIBILITY_CHANGED = "POI_VISIBILITY_CHANGED"
 
 TRAVERSAL_BLOCK_EVENT_TYPES = {
     "BRIDGE_DESTROYED",
@@ -101,6 +103,23 @@ class WorldEventService:
         if weather_key is not None:
             get_weather_modifier(str(weather_key))
 
+
+    @staticmethod
+    def _validate_poi_payload(event_type: str, payload: dict) -> None:
+        if event_type == POI_STATE_CHANGED:
+            state = str(payload.get("state", "")).strip().upper()
+            if not state:
+                raise ValueError("POI_STATE_CHANGED requires payload.state")
+            payload["state"] = state
+        if event_type == POI_VISIBILITY_CHANGED and "visible_at_distance" not in payload:
+            raise ValueError(
+                "POI_VISIBILITY_CHANGED requires payload.visible_at_distance"
+            )
+        if "visible_at_distance" in payload and not isinstance(
+            payload["visible_at_distance"], bool
+        ):
+            raise ValueError("payload.visible_at_distance must be a boolean")
+
     def create(self, campaign_id: int, data: WorldEventCreate) -> WorldEvent:
         self._validate_campaign(campaign_id)
         self._validate_expedition(campaign_id, data.expedition_id)
@@ -114,6 +133,7 @@ class WorldEventService:
             weather_key = payload.get("weather_key")
             if weather_key is not None:
                 payload["weather_key"] = str(weather_key).upper()
+        self._validate_poi_payload(event_type, payload)
 
         event = WorldEvent(
             campaign_id=campaign_id,
@@ -159,6 +179,7 @@ class WorldEventService:
             weather_key = payload.get("weather_key")
             if weather_key is not None:
                 payload["weather_key"] = str(weather_key).upper()
+        self._validate_poi_payload(event_type, payload)
 
         if "game_minute" in changes:
             event.game_minute = changes["game_minute"]

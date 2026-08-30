@@ -23,4 +23,5 @@ class POITemporalStateResponse(BaseModel):
     game_minute: int
     state: str
     exists: bool
+    visible_at_distance: bool
     latest_event: dict | None = None

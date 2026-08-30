@@ -25,7 +25,7 @@ class MapEdgeService:
         self.db = db
         self.repo = MapEdgeRepository(db)
 
-    def create(self, map_version_id: int, data: MapEdgeCreate) -> MapEdge:
+    def create(self, map_version_id: int, data: MapEdgeCreate, *, commit: bool = True) -> MapEdge:
         map_version = self.repo.get_map_version(map_version_id)
         if map_version is None:
             raise NotFoundError("Map version not found")
@@ -45,8 +45,12 @@ class MapEdgeService:
             data.to_r,
         )
 
-        if self.repo.get_between(map_version_id, from_q, from_r, to_q, to_r):
-            raise ConflictError("An edge already exists between these hexes")
+        feature_type = data.feature_type.strip().upper()
+        if self.repo.get_between(
+            map_version_id, from_q, from_r, to_q, to_r,
+            feature_type=feature_type, feature_id=data.feature_id,
+        ):
+            raise ConflictError("This feature edge already exists between these hexes")
 
         edge = MapEdge(
             map_version_id=map_version_id,
@@ -54,19 +58,21 @@ class MapEdgeService:
             from_r=from_r,
             to_q=to_q,
             to_r=to_r,
-            feature_type=data.feature_type.strip().upper(),
+            feature_type=feature_type,
             feature_id=data.feature_id,
+            segment_index=data.segment_index,
             name=data.name,
             extra_data=dict(data.extra_data),
         )
 
         try:
             self.repo.add(edge)
-            self.db.commit()
-            self.db.refresh(edge)
+            if commit:
+                self.db.commit()
+                self.db.refresh(edge)
         except IntegrityError as exc:
             self.db.rollback()
-            raise ConflictError("An edge already exists between these hexes") from exc
+            raise ConflictError("This feature edge already exists between these hexes") from exc
 
         return edge
 

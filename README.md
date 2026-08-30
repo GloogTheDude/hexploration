@@ -808,3 +808,72 @@ alembic upgrade head
 ### v30.2 — brush hot-path optimization
 
 Brush strokes are rendered locally per touched hex instead of forcing a full viewport redraw on every pointer event. Server synchronization is deferred until the stroke ends (with a safety batch threshold), making brush latency independent of total map dimensions in normal editing.
+
+## v0.31 editor/workbench feature tools
+
+- Terrain editor: stroke-level Ctrl+Z / Ctrl+Shift+Z with exact sparse-map server synchronization.
+- DM POI workbench: Ctrl+Z / Ctrl+Shift+Z for POI create/update operations.
+- Ordered multi-selection becomes linear-feature waypoints: ROAD and RIVER interpolate every hex between selected waypoints.
+- BRIDGE, PASSAGE and TRAVERSAL remain two-adjacent-hex features.
+- ROAD and RIVER may share the same physical corridor while keeping separate semantic identities and temporal state.
+- RIVER segments preserve path/flow direction in `extra_data.path_from/path_to`.
+- Area features (`LAKE`, `INLAND_SEA`, `WETLAND`, `REGION`) persist selected hex sets independently from terrain.
+- Migration `0011_linear_area_features` adds ordered edge segments, overlapping semantic edge support and persisted map areas.
+
+## v0.33 — World Editor UX pass
+
+The semantic World Editor now uses an editor-style workflow: compact tool rail, large map canvas, contextual inspector and an optional object browser. POIs, linear features and areas can be selected directly on the map. Roads/rivers are rendered as ordered polylines, shared river/road corridors keep a stable lateral offset, water areas receive a stronger continuous fill and shoreline, and POI marker borders distinguish landmarks from hidden/local POIs. Safe hard-delete actions are available for POIs, linear features and areas; deletion is refused when timeline events or player knowledge already reference the semantic feature.
+
+### River networks (v34)
+
+Rivers now form a directed hydrographic network. A new river stops at the first
+existing river it reaches and stores a stable downstream river relationship on
+`MapFeature`; downstream geometry is not duplicated. Short outlet completion
+can target an existing river as well as SEA/LAKE/INLAND_SEA. The World Editor
+renders river corridors as one de-duplicated network with explicit confluence
+joins. Deleting a downstream river is blocked while tributaries still reference
+it. Migration: `0012_river_networks`.
+
+## v35 — shoreline outlets and linear feature merge
+
+- River rendering stops at the land/water shoreline for SEA, LAKE and INLAND_SEA outlets instead of drawing to the center of the water hex.
+- ROAD and RIVER features can be multi-selected with Ctrl/Cmd+click and merged when they form one continuous chain.
+- The first selected feature keeps its stable semantic identity; unsafe absorbed identities with history or geometry in another map version are rejected.
+- Linear selection uses a white halo while preserving the feature's own route/river color.
+- POIs use a yellow fill, white outline when hidden/not landmark-visible, and dark outline when visible at distance.
+
+
+## v36 — World Editor semantic undo and hex cleanup
+
+- ROAD merge now accepts any connected network, including T-junctions, branches and cycles.
+- Merged road networks render as graph segments instead of an invented single polyline.
+- Normal clicks on LAKE/area cells select the hex; Alt+click explicitly selects the area object.
+- Shift+click forces hex selection beneath POIs/linear features.
+- Delete on a selected hex removes semantic content on that cell without changing terrain; area membership removes only that cell and linear networks are split when needed.
+- Ctrl+Z / Ctrl+Shift+Z now use transactional World Editor snapshots covering POIs, linear features, areas and their world events.
+- No database migration is required beyond 0012_river_networks.
+
+## v41.1 World Editor hotfix
+
+- Stabilise la toolbar Version / Minute / Sauvegarde / Undo / Redo.
+- Corrige les listeners Sauvegarder et Afficher qui avaient été accidentellement attachés dans undoWorld().
+- Rend la timeline WorldEvent explicitement visible avec états chargement/vide/erreur et tri chronologique.
+- Initialise la minute globale depuis la campagne.
+
+## v42 — temporal POI state + readable campaign calendar
+
+- The World Editor keeps canonical `game_minute` integers in the API/database, but exposes a readable fixed campaign calendar: **year / month / day / hour / minute**.
+- Calendar convention: 12 months/year, 30 days/month, 24 hours/day. Year starts at 0; month/day start at 1.
+- POI event forms are semantic instead of JSON-first. `POI_STATE_CHANGED` exposes a state selector and every POI event can explicitly keep/change `visible_at_distance`.
+- `POI_VISIBILITY_CHANGED` changes long-distance visibility without overwriting the physical POI state.
+- POI temporal state is folded across the complete event history so state and visibility remain independent properties.
+- World Editor preview resolves each POI at the selected campaign date. POI borders and object-browser metadata reflect temporal visibility; destroyed POIs receive a destroyed marker.
+- Visibility scans now use temporal `visible_at_distance`, so a lit living settlement may be visible from farther away and stop receiving the landmark range bonus after a destruction/visibility event.
+- Raw payload JSON remains available under an **Advanced** disclosure for uncommon/custom event data.
+
+
+## v44.1 — World Editor UI stabilization
+- Header split into two rows for readable version/time/history controls.
+- Inspector no longer horizontally overflows on event date forms.
+- POI WorldEvent editing now has explicit progress/error feedback and deterministic timeline refresh after PATCH.
+- Cache bust updated to 451.

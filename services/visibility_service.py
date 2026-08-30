@@ -219,9 +219,11 @@ class VisibilityService:
         target: MapHex,
         poi: PointOfInterest,
         weather_key: str | None,
+        visible_at_distance: bool | None = None,
     ) -> tuple[int, int, int, int, int]:
         weather_penalty = self._weather_penalty(weather_key)
-        landmark_bonus = LANDMARK_RANGE_BONUS if poi.is_landmark else 0
+        is_landmark = poi.is_landmark if visible_at_distance is None else visible_at_distance
+        landmark_bonus = LANDMARK_RANGE_BONUS if is_landmark else 0
         elevation_bonus = self._elevation_bonus(origin, target)
         concealment = self._terrain_concealment(target)
         max_distance = max(
@@ -383,6 +385,11 @@ class VisibilityService:
         for poi, target_hex in self.repo.list_pois_with_hex(
             expedition.current_map_version_id
         ):
+            state = self.pois.state_at(
+                poi.id,
+                campaign_id=expedition.campaign_id,
+                game_minute=expedition.current_game_minute,
+            )
             distance = axial_hex_distance(origin.q, origin.r, target_hex.q, target_hex.r)
             (
                 max_distance,
@@ -395,6 +402,7 @@ class VisibilityService:
                 target=target_hex,
                 poi=poi,
                 weather_key=weather_key,
+                visible_at_distance=state.visible_at_distance,
             )
 
             if distance != 0 and distance > max_distance:
@@ -421,11 +429,6 @@ class VisibilityService:
                 )
                 continue
 
-            state = self.pois.state_at(
-                poi.id,
-                campaign_id=expedition.campaign_id,
-                game_minute=expedition.current_game_minute,
-            )
             visible.append(
                 VisiblePOI(
                     poi=poi,

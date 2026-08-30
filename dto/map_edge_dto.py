@@ -12,6 +12,7 @@ class MapEdgeCreate(BaseModel):
     to_r: int
     feature_type: str = Field(min_length=1, max_length=80)
     feature_id: int = Field(gt=0)
+    segment_index: int = Field(default=0, ge=0)
     name: str | None = Field(default=None, max_length=160)
     extra_data: dict[str, Any] = Field(default_factory=dict)
 
@@ -27,5 +28,6 @@ class MapEdgeResponse(BaseModel):
     to_r: int
     feature_type: str
     feature_id: int
+    segment_index: int = 0
     name: str | None
     extra_data: dict[str, Any]

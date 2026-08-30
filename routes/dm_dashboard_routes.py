@@ -13,6 +13,13 @@ from dto.dm_dashboard_dto import (
     DMPOICreate,
     DMPOIUpdate,
     DMFeatureEdgeCreate,
+    DMLinearFeatureCreate,
+    DMLinearFeatureMerge,
+    DMLinearFeatureUpdate,
+    DMAreaFeatureUpdate,
+    DMWorldEditorSnapshot,
+    DMHexFeatureClear,
+    DMAreaFeatureCreate,
     DMTargetWorldEventCreate,
     DMMemberAdd,
     DMMemberSummary,
@@ -101,13 +108,15 @@ def export_dm_map_version(
     campaign_id: int,
     map_version_id: int,
     format: str = Query(default="png"),
+    mode: str = Query(default="world"),
+    quality: str = Query(default="high"),
     user_id: int = Query(gt=0),
     db: Session = Depends(get_db),
 ):
     try:
         DMDashboardService(db)._require_dm(campaign_id, user_id)
         world_map, _ = DMDashboardService(db)._require_map_version(campaign_id, map_version_id)
-        payload, media_type, filename = MapExportService(db).render(map_version_id, format)
+        payload, media_type, filename = MapExportService(db).render(map_version_id, format, mode=mode, quality=quality)
         return Response(
             content=payload,
             media_type=media_type,
@@ -347,6 +356,60 @@ def dm_map_workbench(
         _raise_http(exc)
 
 
+
+
+@router.get(
+    "/api/campaigns/{campaign_id}/dm-map-versions/{map_version_id}/world-editor-snapshot",
+    response_model=DMWorldEditorSnapshot,
+)
+def dm_world_editor_snapshot(
+    campaign_id: int,
+    map_version_id: int,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        return DMDashboardService(db).world_editor_snapshot(campaign_id, user_id, map_version_id)
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError) as exc:
+        _raise_http(exc)
+
+
+@router.put(
+    "/api/campaigns/{campaign_id}/dm-map-versions/{map_version_id}/world-editor-snapshot",
+    response_model=DMMapWorkbenchResponse,
+)
+def dm_restore_world_editor_snapshot(
+    campaign_id: int,
+    map_version_id: int,
+    data: DMWorldEditorSnapshot,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        DMDashboardService(db).restore_world_editor_snapshot(campaign_id, user_id, map_version_id, data)
+        return DMDashboardService(db).get_map_workbench(campaign_id, user_id, map_version_id)
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError) as exc:
+        _raise_http(exc)
+
+
+@router.delete(
+    "/api/campaigns/{campaign_id}/dm-map-versions/{map_version_id}/hex-features",
+    response_model=DMMapWorkbenchResponse,
+)
+def dm_clear_hex_features(
+    campaign_id: int,
+    map_version_id: int,
+    data: DMHexFeatureClear,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        DMDashboardService(db).clear_hex_features(campaign_id, user_id, map_version_id, data.q, data.r)
+        return DMDashboardService(db).get_map_workbench(campaign_id, user_id, map_version_id)
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError) as exc:
+        _raise_http(exc)
+
+
 @router.post(
     "/api/campaigns/{campaign_id}/dm-map-versions/{map_version_id}/pois",
     response_model=POIResponse,
@@ -378,6 +441,131 @@ def dm_update_poi(
 ):
     try:
         return DMDashboardService(db).update_poi(campaign_id, user_id, poi_id, data)
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError) as exc:
+        _raise_http(exc)
+
+
+@router.delete("/api/campaigns/{campaign_id}/dm-pois/{poi_id}", status_code=204)
+def dm_delete_poi(
+    campaign_id: int,
+    poi_id: int,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        DMDashboardService(db).delete_poi(campaign_id, user_id, poi_id)
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError) as exc:
+        _raise_http(exc)
+
+
+@router.post(
+    "/api/campaigns/{campaign_id}/dm-map-versions/{map_version_id}/linear-features",
+    response_model=list[MapEdgeResponse],
+    status_code=201,
+)
+def dm_create_linear_feature(
+    campaign_id: int,
+    map_version_id: int,
+    data: DMLinearFeatureCreate,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        return DMDashboardService(db).create_linear_feature(campaign_id, user_id, map_version_id, data)
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError) as exc:
+        _raise_http(exc)
+
+
+@router.post(
+    "/api/campaigns/{campaign_id}/dm-linear-features/merge",
+    response_model=list[MapEdgeResponse],
+)
+def dm_merge_linear_features(
+    campaign_id: int,
+    data: DMLinearFeatureMerge,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        return DMDashboardService(db).merge_linear_features(campaign_id, user_id, data.edge_ids)
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError) as exc:
+        _raise_http(exc)
+
+
+@router.patch(
+    "/api/campaigns/{campaign_id}/dm-linear-features/{edge_id}",
+    response_model=list[MapEdgeResponse],
+)
+def dm_update_linear_feature(
+    campaign_id: int,
+    edge_id: int,
+    data: DMLinearFeatureUpdate,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        return DMDashboardService(db).update_linear_feature(campaign_id, user_id, edge_id, data)
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError) as exc:
+        _raise_http(exc)
+
+
+@router.patch(
+    "/api/campaigns/{campaign_id}/dm-area-features/{area_id}",
+)
+def dm_update_area_feature(
+    campaign_id: int,
+    area_id: int,
+    data: DMAreaFeatureUpdate,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        return DMDashboardService(db).update_area_feature(campaign_id, user_id, area_id, data)
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError) as exc:
+        _raise_http(exc)
+
+
+@router.delete("/api/campaigns/{campaign_id}/dm-linear-features/{edge_id}", status_code=204)
+def dm_delete_linear_feature(
+    campaign_id: int,
+    edge_id: int,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        DMDashboardService(db).delete_linear_feature(campaign_id, user_id, edge_id)
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError) as exc:
+        _raise_http(exc)
+    return None
+
+
+@router.delete("/api/campaigns/{campaign_id}/dm-area-features/{area_id}", status_code=204)
+def dm_delete_area_feature(
+    campaign_id: int,
+    area_id: int,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        DMDashboardService(db).delete_area_feature(campaign_id, user_id, area_id)
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError) as exc:
+        _raise_http(exc)
+    return None
+
+
+@router.post(
+    "/api/campaigns/{campaign_id}/dm-map-versions/{map_version_id}/area-features",
+    status_code=201,
+)
+def dm_create_area_feature(
+    campaign_id: int,
+    map_version_id: int,
+    data: DMAreaFeatureCreate,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        return DMDashboardService(db).create_area_feature(campaign_id, user_id, map_version_id, data)
     except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError) as exc:
         _raise_http(exc)
 

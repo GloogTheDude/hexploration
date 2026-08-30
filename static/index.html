@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hexploration — Éditeur de carte</title>
-  <link rel="stylesheet" href="/css/style.css?v=302">
-  <script type="module" src="/js/app.js?v=302"></script>
+  <link rel="stylesheet" href="/css/style.css?v=320">
+  <script type="module" src="/js/app.js?v=320"></script>
 </head>
 <body>
   <header class="editor-header">
@@ -15,6 +15,7 @@
     </div>
     <nav>
       <a id="editor-dm-link" href="/dm.html">Dashboard MJ</a>
+      <a id="editor-world-link" href="/world.html">Monde</a>
       <a href="/timeline.html">Timeline</a>
       <a href="/player.html">Carte joueur</a>
     </nav>
@@ -94,7 +95,7 @@
     <section class="canvas-panel">
       <div class="canvas-toolbar">
         <div><strong>Zone de dessin</strong><span id="canvas-hint" class="muted">Molette : zoom · Espace + glisser : déplacer.</span></div>
-        <span id="zoom-label" class="zoom-label">100%</span>
+        <div class="canvas-toolbar-actions"><button id="toggle-poi-overlay" type="button" class="secondary overlay-toggle" aria-pressed="true" title="Afficher/masquer les POI persistés">POI ✓</button><span id="zoom-label" class="zoom-label">100%</span></div>
       </div>
       <div id="canvas-wrap" class="canvas-wrap">
         <canvas id="hex-canvas" width="1200" height="760"></canvas>

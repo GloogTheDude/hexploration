@@ -19,4 +19,4 @@ def get_poi(poi_id:int, db:Session=Depends(get_db)):
 def poi_state(campaign_id:int, poi_id:int, game_minute:int=Query(ge=0), db:Session=Depends(get_db)):
     try: s=POIService(db).state_at(poi_id,campaign_id=campaign_id,game_minute=game_minute)
     except NotFoundError as exc: raise HTTPException(404,str(exc)) from exc
-    return {"poi":s.poi,"game_minute":s.game_minute,"state":s.state,"exists":s.exists,"latest_event": None if s.latest_event is None else {"id":s.latest_event.id,"event_type":s.latest_event.event_type,"game_minute":s.latest_event.game_minute,"payload":s.latest_event.payload}}
+    return {"poi":s.poi,"game_minute":s.game_minute,"state":s.state,"exists":s.exists,"visible_at_distance":s.visible_at_distance,"latest_event": None if s.latest_event is None else {"id":s.latest_event.id,"event_type":s.latest_event.event_type,"game_minute":s.latest_event.game_minute,"payload":s.latest_event.payload}}

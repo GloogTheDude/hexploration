@@ -1,4 +1,4 @@
-import { state } from "./state.js?v=303";
+import { state } from "./state.js?v=320";
 
 export function createTerrainButtons() {
   const container = document.getElementById("terrain-buttons");

@@ -1,5 +1,5 @@
-import { axialToPixel } from "./hex_math.js?v=303";
-import { state } from "./state.js?v=303";
+import { axialToPixel } from "./hex_math.js?v=320";
+import { state } from "./state.js?v=320";
 
 const SQRT3 = Math.sqrt(3);
 const HEX_POINTS = [
@@ -118,16 +118,43 @@ export function drawMap(canvas, map) {
   // This avoids scanning every tile when zoomed into a very large map.
   if (map.layout === "even-q-rect" && map.width && map.height) {
     drawRectangularVisible(ctx, canvas, map, center, size, screenSize);
-    return;
+  } else {
+    // Compatibility path for legacy axial-parallelogram versions.
+    for (const hex of Object.values(map.hexes)) {
+      const p = axialToPixel(hex.q, hex.r, size);
+      const x = center.x + p.x * state.view.scale;
+      const y = center.y + p.y * state.view.scale;
+      if (!onScreen(canvas, x, y, screenSize)) continue;
+      drawHex(ctx, x, y, screenSize, hex.terrain.color, screenSize >= 2.2);
+    }
   }
+  drawPoiOverlay(ctx, canvas, map, center, size, screenSize);
+}
 
-  // Compatibility path for legacy axial-parallelogram versions.
-  for (const hex of Object.values(map.hexes)) {
-    const p = axialToPixel(hex.q, hex.r, size);
-    const x = center.x + p.x * state.view.scale;
-    const y = center.y + p.y * state.view.scale;
-    if (!onScreen(canvas, x, y, screenSize)) continue;
-    drawHex(ctx, x, y, screenSize, hex.terrain.color, screenSize >= 2.2);
+function drawPoiOverlay(ctx, canvas, map, center, size, screenSize) {
+  if (!state.showPoiOverlay || !state.editorPois?.length) return;
+  const scale = state.view.scale;
+  for (const poi of state.editorPois) {
+    const p = axialToPixel(poi.q, poi.r, size);
+    const x = center.x + p.x * scale;
+    const y = center.y + p.y * scale;
+    if (!onScreen(canvas, x, y, Math.max(8, screenSize))) continue;
+    const radius = Math.max(4, Math.min(10, screenSize * .24));
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = poi.is_landmark ? "#ffd166" : "#ff8bc8";
+    ctx.fill();
+    ctx.strokeStyle = "#0b1218";
+    ctx.lineWidth = Math.max(1.5, radius * .28);
+    ctx.stroke();
+    if (screenSize >= 18) {
+      ctx.font = `${Math.max(10, Math.min(14, screenSize * .28))}px sans-serif`;
+      ctx.fillStyle = "#f7fbff";
+      ctx.shadowColor = "rgba(0,0,0,.9)";
+      ctx.shadowBlur = 3;
+      ctx.fillText(poi.name || "POI", x + radius + 4, y - radius - 2);
+      ctx.shadowBlur = 0;
+    }
   }
 }
 

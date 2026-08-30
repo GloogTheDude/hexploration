@@ -88,3 +88,17 @@ def radius_paint(data: list[dict], radius: int):
     modified = list(modified_by_coord.values())
     _mark_dirty(modified)
     return {"modified_hexes": [h.to_dict() for h in modified]}
+
+
+@router.post("/api/hex/paintExact")
+def paint_hexes_exact(data: list[dict]):
+    """Set exact per-cell terrain values; used by editor undo/redo."""
+    modified_by_coord = {}
+    for item in data:
+        terrain = _terrain(item["terrain_key"])
+        tile = hexmap.paint_hex(int(item["q"]), int(item["r"]), terrain)
+        if tile is not None:
+            modified_by_coord[(tile.q, tile.r)] = tile
+    modified = list(modified_by_coord.values())
+    _mark_dirty(modified)
+    return {"modified_hexes": [h.to_dict() for h in modified]}
