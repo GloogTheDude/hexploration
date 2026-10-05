@@ -7,8 +7,8 @@ def test_v43_calendar_and_created_event_ui():
     js = Path("static/js/world.js").read_text(encoding="utf-8")
     assert 'value="POI_CREATED"' in html
     assert 'POI_CREATED — Apparition / création' in html
-    assert '/js/world.js?v=460' in html
-    assert '/css/world.css?v=444' in html
+    assert '/js/world.js?v=461' in html
+    assert '/css/world.css?v=445' in html
     assert '.toolbar-time .compact-date{width:390px!important' in css
     assert "EVENT_LABELS={POI_CREATED:'Création / apparition'" in js
     assert "temporal?.exists===false&&state!=='DESTROYED'" in js

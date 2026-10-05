@@ -13,5 +13,5 @@ def test_world_calendar_is_in_inspector_not_header():
 
 def test_v44_4_assets_are_cache_busted():
     html = (ROOT / "static/world.html").read_text(encoding="utf-8")
-    assert '/css/world.css?v=444' in html
-    assert '/js/world.js?v=460' in html
+    assert '/css/world.css?v=445' in html
+    assert '/js/world.js?v=461' in html

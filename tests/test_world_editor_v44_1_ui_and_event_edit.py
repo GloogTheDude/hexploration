@@ -15,5 +15,5 @@ def test_world_editor_event_edit_has_explicit_submit_feedback_and_cache_bust():
     assert 'id="world-poi-event-feedback"' in html
     assert "submit.textContent=event?'Enregistrer les modifications':'Ajouter l’événement'" in js
     assert "Mise à jour de l’événement #${id}" in js
-    assert '/js/world.js?v=460' in html
-    assert '/css/world.css?v=444' in html
+    assert '/js/world.js?v=461' in html
+    assert '/css/world.css?v=445' in html

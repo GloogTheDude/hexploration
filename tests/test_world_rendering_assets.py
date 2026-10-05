@@ -11,7 +11,7 @@ def test_world_editor_has_continuous_water_and_smooth_river_rendering():
 
 def test_world_editor_cache_bust_for_rendering_fix():
     html = Path("static/world.html").read_text()
-    assert "/js/world.js?v=460" in html
+    assert "/js/world.js?v=461" in html
 
 
 

@@ -19,5 +19,5 @@ def test_world_editor_uses_readable_campaign_calendar_and_dynamic_poi_payload():
 
 def test_world_editor_v42_cache_bust():
     html = Path("static/world.html").read_text(encoding="utf-8")
-    assert '/js/world.js?v=460' in html
-    assert '/css/world.css?v=444' in html
+    assert '/js/world.js?v=461' in html
+    assert '/css/world.css?v=445' in html

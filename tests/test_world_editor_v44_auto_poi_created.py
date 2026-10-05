@@ -53,4 +53,4 @@ def test_world_editor_sends_active_minute_when_creating_poi():
     html = open("static/world.html", encoding="utf-8").read()
     assert "creation_game_minute:worldMinute" in js
     assert "Création / apparition a été ajouté automatiquement" in js
-    assert "/js/world.js?v=460" in html
+    assert "/js/world.js?v=461" in html

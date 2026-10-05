@@ -8,5 +8,5 @@ def test_world_editor_v443_layout_contract():
     assert "overflow-x:clip!important" in css
     assert "grid-template-columns:repeat(5,minmax(0,1fr))!important" in css
     assert "v44.4 — move world calendar into the inspector" in css
-    assert "/css/world.css?v=444" in html
-    assert "/js/world.js?v=460" in html
+    assert "/css/world.css?v=445" in html
+    assert "/js/world.js?v=461" in html

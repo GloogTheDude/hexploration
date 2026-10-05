@@ -63,4 +63,4 @@ def test_world_editor_frontend_has_global_history_and_hex_delete():
     assert "hex-features" in js
     assert "e.altKey" in js
     assert "area=(workbench?.areas||[]).find" in js
-    assert "/js/world.js?v=460" in html
+    assert "/js/world.js?v=461" in html
