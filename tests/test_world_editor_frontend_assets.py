@@ -33,6 +33,19 @@ def test_map_editor_can_toggle_persisted_poi_overlay():
     assert "state.editorPois" in renderer
 
 
+def test_world_editor_keeps_campaign_navigation_without_user_url_identity():
+    html = HTML.read_text(encoding="utf-8")
+    world = (ROOT / "static" / "js" / "world.js").read_text(encoding="utf-8")
+    css = (ROOT / "static" / "css" / "world.css").read_text(encoding="utf-8")
+    assert 'id="world-dm-link"' in html
+    assert "Retour à la campagne et au dashboard MJ" in html
+    assert "← Campagne MJ" in html
+    assert "ui.dmLink.href=`/dm.html?campaign=${campaignId}`" in world
+    assert "dashboard.campaign?.name" in world
+    assert "ui.dmLink.href=`/dm.html?user=" not in world
+    assert ".world-header-actions #world-dm-link{display:inline-block!important}" in css
+
+
 def test_world_editor_uses_contextual_tool_and_inspector_layout():
     html = HTML.read_text(encoding="utf-8")
     js = JS.read_text(encoding="utf-8")

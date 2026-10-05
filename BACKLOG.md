@@ -522,18 +522,25 @@ Result: The primary frontend pages retain cross-area navigation links for the ex
 
 ### MAP-001 — Resolve legacy global editor ownership
 
-Status: `NEEDS_POSTGRES_VALIDATION`
+Status: `DONE`
 
 Result:
 
 - The persisted campaign/editor routes are scoped and authorized through `MapVersion → Map → Campaign`; POIs, edges and areas derive ownership through their map version, and player-map access remains separate and filtered.
 - The frontend editor now creates, loads, paints, updates and clones persistent campaign map versions through the DM workbench routes. It no longer calls the global `/api/map`, `/api/hex/*` or `/api/newmap/*` endpoints.
 - The global in-memory editor routes and their movement integration were removed. The terrain catalog remains available through the dedicated `/api/terrains` route.
-- No schema changes were required. Focused migration tests pass (`40 passed`); the complete SQLite suite and fresh PostgreSQL validation are required before marking this task `DONE`.
+- No schema changes were required. Focused migration tests pass (`40 passed`); the complete SQLite suite passes (`288 passed`), and fresh PostgreSQL validation passes (`288 passed in 109.31s`).
 
-PostgreSQL validation command:
+---
 
-`TEST_DATABASE_URL='postgresql+psycopg://<user>:<password>@localhost:5435/hexploration_test' ./.venv/bin/pytest -q`
+### UX-005 — Restore world editor campaign navigation
+
+Status: `DONE`
+
+The World Editor exposes an explicit campaign/dashboard link that preserves the `campaign` context without using a client-supplied `user_id` as identity. The link remains visible in the compact header layout, and the campaign name is displayed when available from the authenticated DM dashboard response. Covered by `tests/test_world_editor_frontend_assets.py`.
+
+This change is frontend-only and requires no additional PostgreSQL validation.
+
 
 ---
 
