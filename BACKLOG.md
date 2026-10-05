@@ -496,19 +496,27 @@ Do not begin unless explicitly instructed or earlier milestones are complete.
 
 ### UX-001 — Audit frontend error handling
 
-Status: `TODO`
+Status: `DONE`
+
+Result: The primary frontend pages surface backend `detail` errors and handle failed API responses consistently. Covered by `tests/test_mvp_ux_assets.py`; no code change was necessary.
 
 ### UX-002 — Add missing loading states
 
-Status: `TODO`
+Status: `DONE`
+
+Result: The application, dashboard, DM, world and player workflows expose loading feedback before data and save operations complete. Covered by `tests/test_mvp_ux_assets.py`; no code change was necessary.
 
 ### UX-003 — Add save/success feedback
 
-Status: `TODO`
+Status: `DONE`
+
+Result: Existing editor and management workflows expose save/progress feedback, including success feedback where applicable. Covered by `tests/test_mvp_ux_assets.py`; no code change was necessary.
 
 ### UX-004 — Audit navigation consistency
 
-Status: `TODO`
+Status: `DONE`
+
+Result: The primary frontend pages retain cross-area navigation links for the existing dashboard, DM, player, timeline and world workflows. Covered by `tests/test_mvp_ux_assets.py`; no code change was necessary.
 
 ---
 
