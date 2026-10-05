@@ -35,6 +35,18 @@ def test_workbench_coordinate_lookups_are_indexed():
     assert "workbenchHexByCoord" in dm
 
 
+def test_interactive_renderers_share_viewport_culling_helper():
+    viewport = Path("static/js/viewport.js").read_text(encoding="utf-8")
+    renderer = Path("static/js/renderer.js").read_text(encoding="utf-8")
+    world = Path("static/js/world.js").read_text(encoding="utf-8")
+    assert "computeVisibleHexBounds" in viewport
+    assert 'from "./viewport.js?v=1"' in renderer
+    assert "./viewport.js?v=1" in world
+    assert "rowBounds" in renderer
+    assert "rowBounds" in world
+    assert "map.hexes?.[`${q},${r}`]" in renderer
+
+
 def test_editor_defaults_to_one_to_one_and_space_pan():
     app = Path("static/js/app.js").read_text(encoding="utf-8")
     state = Path("static/js/state.js").read_text(encoding="utf-8")

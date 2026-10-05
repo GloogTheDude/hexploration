@@ -570,6 +570,33 @@ Local PostgreSQL validation command:
     ./.venv/bin/pytest -q
 
 
+### MAP-PERF-002 — Add viewport culling to world renderer
+
+Status: `DONE`
+
+Manual trigger:
+
+- after Phase A/P0, a 400×400 map was still slow when all 160,000 hexes were
+  visible, while the editor became fluid after zooming in;
+- this confirmed that the remaining interactive bottleneck was rendering the
+  visible grid, not sparse persistence or terrain synchronization.
+
+Result:
+
+- the existing inline culling calculations are now centralized in the pure
+  `computeVisibleHexBounds()` helper;
+- both the terrain Canvas renderer and `world.html` use the same clamped,
+  geometry-derived q/r bounds with a safety margin;
+- sparse implicit terrain remains resolved from `default_terrain_key` without
+  dense allocation;
+- pan, zoom, resize and out-of-map camera positions remain bounded;
+- export URLs and backend export rendering are unchanged;
+- focused viewport tests pass (`13 passed`), and no database change is involved.
+
+The 400×400 fully-visible case remains intentionally expensive because B1 does
+not introduce LOD. LOD is deferred to a later phase.
+
+
 ---
 
 # Milestone 4 — Deployment

@@ -1,5 +1,6 @@
 import { axialToPixel } from "./hex_math.js?v=320";
 import { state } from "./state.js?v=320";
+import { computeVisibleHexBounds } from "./viewport.js?v=1";
 
 const SQRT3 = Math.sqrt(3);
 const HEX_POINTS = [
@@ -160,7 +161,6 @@ function drawPoiOverlay(ctx, canvas, map, center, size, screenSize) {
 
 function drawRectangularVisible(ctx, canvas, map, center, size, screenSize) {
   const scale = state.view.scale;
-  const margin = Math.max(screenSize * 2, 8);
   const defaultTerrain = state.terrains?.[map.default_terrain_key || "SEA"];
 
   // At continent/world overview zooms individual hexes are sub-pixel. Drawing
@@ -185,23 +185,22 @@ function drawRectangularVisible(ctx, canvas, map, center, size, screenSize) {
     return;
   }
 
-  const worldMinX = (-center.x - margin) / scale;
-  const worldMaxX = (canvas.width - center.x + margin) / scale;
-  let colMin = Math.floor(worldMinX / (1.5 * size) + map.width / 2) - 2;
-  let colMax = Math.ceil(worldMaxX / (1.5 * size) + map.width / 2) + 2;
-  colMin = Math.max(0, colMin);
-  colMax = Math.min(map.width - 1, colMax);
+  const bounds = computeVisibleHexBounds({
+    canvasWidth: canvas.width,
+    canvasHeight: canvas.height,
+    centerX: center.x,
+    centerY: center.y,
+    scale,
+    size,
+    mapWidth: map.width,
+    mapHeight: map.height,
+  });
   const drawOutline = screenSize >= 2.2;
 
-  for (let col = colMin; col <= colMax; col++) {
+  for (let col = bounds.colMin; col <= bounds.colMax; col++) {
     const q = col - Math.floor(map.width / 2);
     const parity = q & 1;
-    const worldMinY = (-center.y - margin) / scale;
-    const worldMaxY = (canvas.height - center.y + margin) / scale;
-    let rowMin = Math.floor(worldMinY / (SQRT3 * size) + map.height / 2 + parity / 2) - 2;
-    let rowMax = Math.ceil(worldMaxY / (SQRT3 * size) + map.height / 2 + parity / 2) + 2;
-    rowMin = Math.max(0, rowMin);
-    rowMax = Math.min(map.height - 1, rowMax);
+    const { rowMin, rowMax } = bounds.rowBounds(col);
     for (let row = rowMin; row <= rowMax; row++) {
       const r = row - Math.floor(map.height / 2) - Math.floor((q + parity) / 2);
       const hex = map.hexes?.[`${q},${r}`];
