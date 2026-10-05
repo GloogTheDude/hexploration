@@ -38,11 +38,17 @@ def test_world_editor_keeps_campaign_navigation_without_user_url_identity():
     world = (ROOT / "static" / "js" / "world.js").read_text(encoding="utf-8")
     css = (ROOT / "static" / "css" / "world.css").read_text(encoding="utf-8")
     assert 'id="world-dm-link"' in html
+    assert html.index('id="world-dm-link"') < html.index('class="world-export-control"')
+    assert 'id="world-session-slot"' in html
     assert "Retour à la campagne et au dashboard MJ" in html
     assert "← Campagne MJ" in html
     assert "ui.dmLink.href=`/dm.html?campaign=${campaignId}`" in world
     assert "dashboard.campaign?.name" in world
+    assert "attachSessionBar" in world
+    assert "hex-authenticated" in world
     assert "ui.dmLink.href=`/dm.html?user=" not in world
+    assert "history.replaceState(null,'',`/world.html?campaign=${campaignId}&version=${versionId}`)" in world
+    assert "history.replaceState(null,'',`/world.html?user=" not in world
     assert ".world-header-actions #world-dm-link{display:inline-block!important}" in css
 
 

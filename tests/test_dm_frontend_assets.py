@@ -73,7 +73,8 @@ def test_dm_dashboard_bootstraps_members_characters_and_campaign_editor():
 
 def test_dm_map_versions_link_to_version_editor_without_internal_id_hunting():
     js = JS.read_text(encoding="utf-8")
-    assert 'href="/world.html?user=${state.userId}&campaign=${state.campaignId}&version=${v.id}"' in js
+    assert 'href="/world.html?campaign=${state.campaignId}&version=${v.id}"' in js
+    assert 'world.html?user=' not in js
     assert '>Terrain</a>' in js
     assert '>Monde</a>' in js
     assert '&map=${m.id}&version=${v.id}' in js
