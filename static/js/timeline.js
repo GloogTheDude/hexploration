@@ -1,4 +1,5 @@
 import { formatGameDate, datePartsFromGameMinute, gameMinuteFromDateInputs, optionalGameMinuteFromDateInputs, clearDateInputs, setDateInputs } from './game_time.js';
+import { authReady, authFetch } from './auth.js';
 const embedded = new URLSearchParams(window.location.search).get("embedded") === "1";
 if (embedded) document.body.classList.add("embedded");
 
@@ -32,7 +33,7 @@ function refreshComputedMinute() {
 }
 
 async function api(url, options = {}) {
-    const response = await fetch(url, options);
+    const response = await authFetch(url, options);
     if (response.status === 204) return null;
     let data = null;
     try { data = await response.json(); } catch { /* empty/non-json */ }
@@ -244,7 +245,7 @@ $("load-btn").addEventListener("click", loadTimeline);
 $("apply-filters-btn").addEventListener("click", loadTimeline);
 $("clear-filters-btn").addEventListener("click", () => {
     clearDateInputs("filter-from"); clearDateInputs("filter-to"); for (const id of ["filter-event-type", "filter-target-type", "filter-target-id"]) $(id).value = "";
-    loadTimeline();
+    authReady.then(loadTimeline);
 });
 $("new-event-btn").addEventListener("click", openCreateDialog);
 $("close-dialog-btn").addEventListener("click", () => dialog.close());

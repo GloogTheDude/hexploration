@@ -1,8 +1,9 @@
 import { formatGameDate, formatDurationMinutes } from './game_time.js';
 import { axialToPixel, pixelToAxial, hexDistance } from './hex_math.js';
+import { authReady, authFetch } from './auth.js';
 
 const params = new URLSearchParams(location.search);
-const userId = Number(params.get('user'));
+let userId = 0;
 const campaignId = Number(params.get('campaign'));
 const expeditionId = Number(params.get('expedition'));
 const $ = s => document.querySelector(s);
@@ -27,7 +28,7 @@ let arrowTargets=[];
 let redoStack=[];
 
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
-async function api(path,options={}){const r=await fetch(path,{cache:'no-store',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});if(!r.ok){let d=`${r.status} ${r.statusText}`;try{const b=await r.json();d=typeof b.detail==='string'?b.detail:JSON.stringify(b.detail)}catch{}throw new Error(d)}return r.status===204?null:r.json()}
+async function api(path,options={}){const r=await authFetch(path,{cache:'no-store',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});if(!r.ok){let d=`${r.status} ${r.statusText}`;try{const b=await r.json();d=typeof b.detail==='string'?b.detail:JSON.stringify(b.detail)}catch{}throw new Error(d)}return r.status===204?null:r.json()}
 function toast(m){ui.toast.textContent=m;ui.toast.classList.remove('hidden');setTimeout(()=>ui.toast.classList.add('hidden'),2200)}
 function offsetToAxial(col,row,w,h){const q=col-Math.floor(w/2),centered=row-Math.floor(h/2),r=centered-Math.floor((q+(q&1))/2);return{q,r}}
 function sync(){const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight),ratio=Math.max(1,devicePixelRatio||1);if(canvas.width!==Math.round(w*ratio)||canvas.height!==Math.round(h*ratio)){canvas.width=Math.round(w*ratio);canvas.height=Math.round(h*ratio)}ctx.setTransform(ratio,0,0,ratio,0,0);return{w,h}}
@@ -124,4 +125,4 @@ canvas.addEventListener('pointerup',e=>{if(!dragging)return;dragging=false;if(!d
 canvas.addEventListener('wheel',e=>{e.preventDefault();view.scale=Math.max(.12,Math.min(3.5,view.scale*(e.deltaY<0?1.12:.89)));draw()},{passive:false});
 ui.move.addEventListener('click',move);ui.dmPing.addEventListener('click',placeDmPing);ui.dmPingColor.addEventListener('change',saveDmPingColor);ui.fit.addEventListener('click',fit);ui.refresh.addEventListener('click',()=>load(false));ui.showHiddenPois.addEventListener('change',()=>{renderPois();draw()});ui.undoMove.addEventListener('click',undoMove);ui.redoMove.addEventListener('click',redoMove);
 window.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey))return;if(['INPUT','TEXTAREA','SELECT'].includes(e.target?.tagName))return;const key=e.key.toLowerCase();if(key==='z'){e.preventDefault();undoMove()}else if(key==='y'){e.preventDefault();redoMove()}});
-new ResizeObserver(draw).observe(canvas.parentElement);loadDmPingColor();load(true);setInterval(()=>{if(document.visibilityState==='visible')load(false)},700);setInterval(()=>{if(pingState?.created_at||dmPingState?.created_at)draw()},140);
+new ResizeObserver(draw).observe(canvas.parentElement);authReady.then(async()=>{userId=(await import('./auth.js')).getCurrentUser()?.id||0;loadDmPingColor();load(true);setInterval(()=>{if(document.visibilityState==='visible')load(false)},700);setInterval(()=>{if(pingState?.created_at||dmPingState?.created_at)draw()},140)});

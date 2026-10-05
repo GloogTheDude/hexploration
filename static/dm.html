@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hexploration — DM Dashboard</title>
   <link rel="stylesheet" href="/css/dm.css">
+  <link rel="stylesheet" href="/css/auth.css?v=1">
   <script type="module" src="/js/dm.js?v=460"></script>
 </head>
 <body>
@@ -26,10 +27,9 @@
   <aside class="sidebar">
     <section class="panel identity">
       <h2>Dungeon Master</h2>
-      <label>User ID
-        <div class="input-row"><input id="user-id" type="number" min="1" value="1"><button id="load-user">Charger</button></div>
-      </label>
-      <p id="identity-message" class="muted">Charge un utilisateur pour afficher ses campagnes MJ.</p>
+      <input id="user-id" type="hidden">
+      <button id="load-user" type="button" hidden>Charger</button>
+      <p id="identity-message" class="muted">Vérification de la session…</p>
       <p id="error" class="error" role="alert"></p>
     </section>
 

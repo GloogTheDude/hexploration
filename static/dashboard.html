@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hexploration — Dashboard</title>
 <link rel="stylesheet" href="/css/dashboard.css">
+<link rel="stylesheet" href="/css/auth.css?v=1">
 <script type="module" src="/js/dashboard.js?v=461"></script>
 </head>
 <body>
@@ -21,10 +22,10 @@
     <section class="card identity">
       <h2>Joueur</h2>
       <div class="row">
-        <label>User ID <input id="user-id" type="number" min="1" value="1"></label>
-        <button id="load-user">Charger</button>
+        <input id="user-id" type="hidden">
+        <button id="load-user" type="button" hidden>Charger</button>
       </div>
-      <p id="user-info" class="muted">Charge un utilisateur.</p>
+      <p id="user-info" class="muted">Vérification de la session…</p>
       <p id="error" class="error" role="alert"></p>
     </section>
 

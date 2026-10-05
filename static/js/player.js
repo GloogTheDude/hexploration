@@ -1,11 +1,11 @@
 import { formatGameDate } from './game_time.js';
 import { axialToPixel, pixelToAxial, hexDistance } from "./hex_math.js";
+import { authReady, authFetch } from './auth.js';
 
 const params = new URLSearchParams(window.location.search);
 const embeddedMode = params.get("embedded") === "1";
 const displayMode = params.get("display") === "1";
-const urlUserId = Number(params.get("user"));
-let activePingUserId = urlUserId || 0;
+let activePingUserId = 0;
 if (embeddedMode) document.body.classList.add("embedded");
 if (displayMode) document.body.classList.add("shared-display");
 
@@ -56,7 +56,7 @@ function showToast(message) {
     window.setTimeout(() => toast.classList.add("hidden"), 2200);
 }
 async function api(path, options = {}) {
-    const response = await fetch(path, {
+    const response = await authFetch(path, {
         cache: "no-store",
         headers: {"Content-Type": "application/json", ...(options.headers || {})},
         ...options,
@@ -561,6 +561,8 @@ canvasResizeObserver.observe(canvas);
 requestAnimationFrame(() => resizeCanvas());
 
 const initialExpedition = Number(new URLSearchParams(window.location.search).get("expedition"));
+authReady.then(async () => {
+activePingUserId = (await import('./auth.js')).getCurrentUser()?.id || 0;
 loadPingColor();
 if (initialExpedition) {
     expeditionInput.value = String(initialExpedition);
@@ -570,6 +572,7 @@ if (initialExpedition) {
         loadMap({fit: true});
     }
 }
+});
 
 window.setInterval(() => { if (state && document.visibilityState === "visible") loadMap().catch?.(()=>{}); }, 900);
 window.setInterval(() => { if (state && state.ping_created_at) draw(); }, 140);

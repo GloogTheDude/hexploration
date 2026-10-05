@@ -1,4 +1,5 @@
 import { formatGameDate, setDateInputs, gameMinuteFromDateInputs } from './game_time.js';
+import { authReady, authFetch, getCurrentUser, logout } from './auth.js';
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 
@@ -28,7 +29,7 @@ Object.assign(ui, {
 });
 
 async function api(path, options = {}) {
-  const response = await fetch(path, { headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options });
+  const response = await authFetch(path, { headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options });
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
     try { const body = await response.json(); detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail); } catch (_) {}
@@ -353,8 +354,9 @@ async function selectCampaign(id) {
 }
 
 async function loadUser() {
-  const userId = Number(ui.userId.value); if (!userId) return;
-  state.userId = userId; qs('user', userId); ui.error.textContent = ''; ui.identity.textContent = 'Chargement…';
+  const user = getCurrentUser(); if (!user) return;
+  const userId = user.id;
+  state.userId = userId; ui.error.textContent = ''; ui.identity.textContent = 'Chargement…';
   try {
     state.campaigns = await api(`/api/users/${userId}/dm-campaigns`);
     ui.identity.textContent = `${state.campaigns.length} campagne(s) administrée(s) comme MJ.`;
@@ -366,7 +368,7 @@ async function loadUser() {
   } catch (e) { ui.identity.textContent = 'Impossible de charger les campagnes MJ.'; ui.error.textContent = e.message; }
 }
 
-ui.loadUser.addEventListener('click', loadUser); ui.userId.addEventListener('keydown', e => { if (e.key === 'Enter') loadUser(); });
+ui.loadUser?.addEventListener('click', loadUser); ui.userId?.addEventListener('keydown', e => { if (e.key === 'Enter') loadUser(); });
 $$('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 $$('[data-jump]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.jump)));
 
@@ -381,8 +383,7 @@ ui.planMapVersion.addEventListener('change', renderPlanner);
 ui.memberForm?.addEventListener('submit', addMember);
 ui.refreshInvitations?.addEventListener('click', refreshInvitations);
 ui.refreshExpeditions.addEventListener('click', refreshDashboard); ui.inspectWorld.addEventListener('click', inspectWorld); ui.useCurrentMinute.addEventListener('click', () => { if (state.dashboard) { ui.worldMinute.value = state.dashboard.campaign_game_minute; inspectWorld(); } });
-const initialUser = Number(new URL(location.href).searchParams.get('user')); if (initialUser) ui.userId.value = initialUser;
-loadUser();
+authReady.then(loadUser);
 
 // --- v21: campaign creation + persisted map feature workbench -----------------
 async function createCampaign(event) {

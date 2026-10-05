@@ -2,6 +2,7 @@ import { state } from "./state.js?v=320";
 import { fetchMap, fetchTerrains, createMap } from "./api.js?v=320";
 import { drawMap, requestMapDraw, resizeCanvasToDisplaySize } from "./renderer.js?v=320";
 import { createTerrainButtons } from "./ui.js?v=320";
+import { authReady, authFetch } from './auth.js';
 import { mouseToHex, paintHexesBatchRadius, flushPendingPaint, beginPaintStroke, endPaintStroke, undoPaint, redoPaint, clearPaintHistory } from "./tools.js?v=320";
 import { axialToPixel, getHexLine } from "./hex_math.js?v=320";
 import { gameMinuteFromDateInputs, setDateInputs, formatGameDate } from "./game_time.js";
@@ -207,7 +208,7 @@ function updateUrlContext() {
 }
 
 async function fetchJson(url, options = {}) {
-  const response = await fetch(url, options);
+  const response = await authFetch(url, options);
   let body = null;
   try { body = await response.json(); } catch (_) {}
   if (!response.ok) throw new Error(typeof body?.detail === "string" ? body.detail : `${response.status} ${response.statusText}`);
@@ -558,6 +559,7 @@ window.addEventListener("resize", redraw);
 
 (async function init() {
   try {
+    await authReady;
     state.terrains = await fetchTerrains();
     createTerrainButtons();
     state.map = await fetchMap();

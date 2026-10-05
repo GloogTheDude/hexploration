@@ -1,4 +1,5 @@
 import { formatGameDate } from './game_time.js';
+import { authReady, authFetch, getCurrentUser, logout } from './auth.js';
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -17,7 +18,7 @@ const state = { user: null, campaigns: [], invitations: [], characters: [], camp
 async function api(path, options = {}) {
   const isForm = options.body instanceof FormData;
   const headers = isForm ? { ...(options.headers || {}) } : { "Content-Type": "application/json", ...(options.headers || {}) };
-  const response = await fetch(path, { ...options, headers });
+  const response = await authFetch(path, { ...options, headers });
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
     try { const body = await response.json(); detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail); } catch (_) {}
@@ -402,9 +403,9 @@ async function createPlayerCharacter(event) {
 async function load() {
   ui.error.textContent = "";
   try {
-    const id = Number(ui.userId.value); if (!id) return;
-    qs("user", id);
-    const [user, campaigns, invitations, characters] = await Promise.all([api(`/api/users/${id}`), api(`/api/campaigns/by-user/${id}`), api(`/api/users/${id}/campaign-invitations`), api(`/api/users/${id}/characters`)]);
+    const user = getCurrentUser(); if (!user) return;
+    const id = user.id;
+    const [campaigns, invitations, characters] = await Promise.all([api(`/api/campaigns/by-user/${id}`), api(`/api/users/${id}/campaign-invitations`), api(`/api/users/${id}/characters`)]);
     state.user = user; state.campaigns = campaigns; state.invitations = invitations; state.characters = characters; state.campaign = null; state.character = null; state.expedition = null;
     if (ui.dashboardPingColor) ui.dashboardPingColor.value = user.ping_color || "#ff4f64";
     ui.dashboardPingColorControl?.classList.remove("hidden");
@@ -429,13 +430,11 @@ ui.refreshInvitations.addEventListener("click", () => refreshPlayerData());
 setInterval(() => { if(state.user && document.visibilityState === 'visible') refreshPlayerData().catch(()=>{}); }, 10000);
 ui.dashboardPingColor?.addEventListener("change", saveDashboardPingColor);
 ui.mapFrame?.addEventListener("load", () => { if (state.user) syncPingColorToMap(state.user.ping_color || ui.dashboardPingColor?.value || "#ff4f64"); });
-ui.loadBtn.addEventListener("click", load);
-ui.userId.addEventListener("keydown", e => { if (e.key === "Enter") load(); });
+ui.loadBtn?.addEventListener("click", load);
+ui.userId?.addEventListener("keydown", e => { if (e.key === "Enter") load(); });
 $$(".tab").forEach(tab => tab.addEventListener("click", () => setTab(tab.dataset.tab)));
 ui.wikiRefresh.addEventListener("click", loadWiki);
 ui.recallRefresh.addEventListener("click", loadRecall);
 ui.recallForm.addEventListener("submit", searchRecall);
 
-const initialUser = Number(new URL(location.href).searchParams.get("user"));
-if (initialUser) ui.userId.value = initialUser;
-load();
+authReady.then(load);
