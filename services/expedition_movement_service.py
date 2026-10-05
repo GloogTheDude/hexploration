@@ -14,6 +14,7 @@ from services.errors import (
 from services.movement_cost_service import MovementCostService
 from services.world_event_service import WorldEventService
 from services.visibility_service import VisibilityService
+from services.map_hex_service import get_or_materialize_hex
 
 
 class InvalidMovementError(Exception):
@@ -68,6 +69,8 @@ class ExpeditionMovementService:
 
         target_hex = self.repo.get_hex(data.map_version_id, data.q, data.r)
         if target_hex is None:
+            target_hex = get_or_materialize_hex(self.db, map_version, data.q, data.r)
+        if target_hex is None:
             raise NotFoundError("Hex not found in this map version")
 
         expedition.current_map_version_id = data.map_version_id
@@ -115,19 +118,18 @@ class ExpeditionMovementService:
                 "Destination must be an adjacent hex"
             )
 
-        destination = self.repo.get_hex(
-            expedition.current_map_version_id,
-            to_q,
-            to_r,
-        )
+        map_version = self.repo.get_map_version(expedition.current_map_version_id)
+        if map_version is None:
+            raise NotFoundError("Map version not found")
+        destination = self.repo.get_hex(expedition.current_map_version_id, to_q, to_r)
+        if destination is None:
+            destination = get_or_materialize_hex(self.db, map_version, to_q, to_r)
         if destination is None:
             raise NotFoundError("Destination hex not found")
 
-        source = self.repo.get_hex(
-            expedition.current_map_version_id,
-            expedition.current_q,
-            expedition.current_r,
-        )
+        source = self.repo.get_hex(expedition.current_map_version_id, expedition.current_q, expedition.current_r)
+        if source is None:
+            source = get_or_materialize_hex(self.db, map_version, expedition.current_q, expedition.current_r)
         if source is None:
             raise ConflictError("Current expedition hex no longer exists")
 
@@ -203,6 +205,16 @@ class ExpeditionMovementService:
         expedition.current_q = to_q
         expedition.current_r = to_r
         expedition.current_game_minute = arrival
+        expedition.ping_q = None
+        expedition.ping_r = None
+        expedition.ping_game_minute = None
+        expedition.ping_user_id = None
+        expedition.ping_created_at = None
+        expedition.dm_ping_q = None
+        expedition.dm_ping_r = None
+        expedition.dm_ping_game_minute = None
+        expedition.dm_ping_user_id = None
+        expedition.dm_ping_created_at = None
 
         for participant in self.repo.active_participants(expedition.id):
             character = self.repo.get_character(participant.character_id)
@@ -219,6 +231,52 @@ class ExpeditionMovementService:
 
         self.db.commit()
         self.db.refresh(movement)
+        return movement
+
+    def undo_last_move(self, expedition_id: int) -> Movement:
+        expedition = self.repo.get_expedition_for_update(expedition_id)
+        if expedition is None:
+            raise NotFoundError("Expedition not found")
+        if expedition.status != ExpeditionStatus.ACTIVE:
+            raise ConflictError("Only an active expedition can undo movement")
+
+        movement = self.repo.latest_movement(expedition_id)
+        if movement is None:
+            raise ConflictError("No movement to undo")
+        if (
+            expedition.current_q != movement.to_q
+            or expedition.current_r != movement.to_r
+            or expedition.current_game_minute != movement.arrival_game_minute
+        ):
+            raise ConflictError("The expedition changed after this movement; undo is no longer safe")
+
+        # Remove only knowledge automatically created by this arrival. Explicit
+        # DM reveals remain intact even when they occurred at the same minute.
+        self.repo.remove_auto_observations_for_arrival(
+            expedition_id, movement.arrival_game_minute
+        )
+
+        expedition.current_q = movement.from_q
+        expedition.current_r = movement.from_r
+        expedition.current_game_minute = movement.departure_game_minute
+        expedition.ping_q = None
+        expedition.ping_r = None
+        expedition.ping_game_minute = None
+        expedition.ping_user_id = None
+        expedition.ping_created_at = None
+        expedition.dm_ping_q = None
+        expedition.dm_ping_r = None
+        expedition.dm_ping_game_minute = None
+        expedition.dm_ping_user_id = None
+        expedition.dm_ping_created_at = None
+
+        for participant in self.repo.active_participants(expedition.id):
+            character = self.repo.get_character(participant.character_id)
+            if character is not None and character.current_game_minute == movement.arrival_game_minute:
+                character.current_game_minute = movement.departure_game_minute
+
+        self.db.delete(movement)
+        self.db.commit()
         return movement
 
     def history(self, expedition_id: int) -> list[Movement]:

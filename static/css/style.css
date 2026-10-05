@@ -11,3 +11,5 @@ button{border:1px solid #3a5366;border-radius:6px;background:#1b2a36;color:var(-
 
 /* v32 semantic overlays in terrain editor */
 .canvas-toolbar-actions{display:flex;align-items:center;gap:8px}.overlay-toggle[aria-pressed="true"]{border-color:#ff8bc8;box-shadow:0 0 0 1px #ff8bc844 inset}.overlay-toggle{min-width:64px}
+
+.persist-date-field{min-width:360px}.persist-date-grid{display:grid;grid-template-columns:repeat(5,minmax(52px,1fr));gap:5px}.persist-date-grid label{display:grid;gap:2px;font-size:9px;color:#8fa5b5}.persist-date-grid input{min-width:0;width:100%;text-align:center}@media(max-width:900px){.persist-date-field{min-width:100%}}

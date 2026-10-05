@@ -159,3 +159,43 @@ def test_player_map_bootstrap_is_idempotent_once_knowledge_exists(db: Session, c
     assert initialized is False
     assert map_count == 0
     assert poi_count == 0
+
+
+def test_player_map_clips_area_geometry_to_known_cells(db: Session, campaign):
+    from db.models import MapArea
+
+    world_map, version, source, destination = make_map_with_two_hexes(db, campaign)
+    expedition, character = make_active_expedition(db, campaign, version, game_minute=100)
+    assert character is not None
+    db.add(MapArea(
+        map_version_id=version.id,
+        feature_type="LAKE",
+        feature_id=77,
+        name="Known shore",
+        cells=[{"q": source.q, "r": source.r}, {"q": destination.q, "r": destination.r}],
+        extra_data={},
+    ))
+    db.add(CharacterMapHexObservation(
+        character_id=character.id,
+        expedition_id=expedition.id,
+        map_id=world_map.id,
+        map_version_id=version.id,
+        q=source.q,
+        r=source.r,
+        observed_game_minute=100,
+        discovery_state="VISITED",
+        terrain_key=source.terrain_key,
+        elevation=source.elevation,
+        visibility_score=source.visibility_score,
+        extra_data={},
+    ))
+    db.commit()
+
+    state = PlayerMapService(db).get(expedition.id)
+
+    assert state.areas == [{
+        "feature_type": "LAKE",
+        "feature_id": 77,
+        "name": "Known shore",
+        "cells": [{"q": 0, "r": 0}],
+    }]

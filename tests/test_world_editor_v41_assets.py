@@ -20,5 +20,5 @@ def test_v41_world_editor_has_task_oriented_controls():
 
 def test_v41_cache_bust():
     html = Path("static/world.html").read_text(encoding="utf-8")
-    assert '/js/world.js?v=444' in html
+    assert '/js/world.js?v=460' in html
     assert '/css/world.css?v=444' in html

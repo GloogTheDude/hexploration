@@ -1,3 +1,4 @@
+import { formatGameDate, setDateInputs, gameMinuteFromDateInputs } from './game_time.js';
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 
@@ -8,7 +9,7 @@ const ui = {
   statExpeditions: $('#stat-expeditions'), statCharacters: $('#stat-characters'), statMaps: $('#stat-maps'), statEvents: $('#stat-events'), empty: $('#empty'),
   overviewExpeditions: $('#overview-expeditions'), overviewEvents: $('#overview-events'), overviewMaps: $('#overview-maps'),
   expeditionList: $('#expedition-list'), expeditionDetail: $('#expedition-detail'), refreshExpeditions: $('#refresh-expeditions'),
-  togglePlanner: $('#toggle-planner'), plannerForm: $('#expedition-planner-form'), planName: $('#plan-name'), planMinute: $('#plan-minute'), planMapVersion: $('#plan-map-version'), planTransport: $('#plan-transport'), planQ: $('#plan-q'), planR: $('#plan-r'), planCharacters: $('#plan-characters'), planStartNow: $('#plan-start-now'), plannerMessage: $('#planner-message'),
+  togglePlanner: $('#toggle-planner'), plannerForm: $('#expedition-planner-form'), planName: $('#plan-name'), planMap: $('#plan-map'), planMapVersion: $('#plan-map-version'), planHubSummary: $('#plan-hub-summary'), planCharacters: $('#plan-characters'), planStartNow: $('#plan-start-now'), plannerMessage: $('#planner-message'),
   worldMinute: $('#world-minute'), inspectWorld: $('#inspect-world'), useCurrentMinute: $('#use-current-minute'), worldSummary: $('#world-summary'), worldGlobal: $('#world-global'), worldTargets: $('#world-targets'),
   mapsList: $('#maps-list'), charactersList: $('#characters-list'), timelineFrame: $('#timeline-frame'), timelineOpen: $('#timeline-open'),
   mapEditorOpen: $('#map-editor-open'), worldEditorOpen: $('#world-editor-open'), membersList: $('#members-list'), memberForm: $('#member-form'), memberUserId: $('#member-user-id'), memberMessage: $('#member-message'), sentInvitations: $('#sent-invitations'), refreshInvitations: $('#refresh-invitations'),
@@ -19,7 +20,7 @@ const state = { userId: null, campaigns: [], campaignId: null, dashboard: null, 
 Object.assign(ui, {
   toggleCampaignCreate: $('#toggle-campaign-create'), campaignCreateForm: $('#campaign-create-form'), campaignCreateName: $('#campaign-create-name'), campaignCreateEpoch: $('#campaign-create-epoch'), campaignCreateDescription: $('#campaign-create-description'), campaignCreateMessage: $('#campaign-create-message'), cancelCampaignCreate: $('#cancel-campaign-create'),
   workbenchVersion: $('#workbench-version'), loadWorkbench: $('#load-workbench'), workbenchMessage: $('#workbench-message'), mapCanvas: $('#dm-map-canvas'), selectedHex: $('#selected-hex'),
-  newPoi: $('#new-poi'), poiList: $('#poi-list'), poiForm: $('#poi-form'), poiId: $('#poi-id'), poiName: $('#poi-name'), poiKind: $('#poi-kind'), poiLandmark: $('#poi-landmark'), poiDescription: $('#poi-description'),
+  newPoi: $('#new-poi'), poiList: $('#poi-list'), poiForm: $('#poi-form'), poiId: $('#poi-id'), poiName: $('#poi-name'), poiKind: $('#poi-kind'), poiLandmark: $('#poi-landmark'), poiHub: $('#poi-hub'), poiDescription: $('#poi-description'),
   poiEventForm: $('#poi-event-form'), poiEventMinute: $('#poi-event-minute'), poiEventType: $('#poi-event-type'), poiEventPayload: $('#poi-event-payload'), poiEventNote: $('#poi-event-note'),
   edgeSelection: $('#edge-selection'), edgeForm: $('#edge-form'), edgeType: $('#edge-type'), edgeName: $('#edge-name'), edgeList: $('#edge-list'),
   edgeEventForm: $('#edge-event-form'), edgeEventMinute: $('#edge-event-minute'), edgeEventType: $('#edge-event-type'), edgeEventPayload: $('#edge-event-payload'), edgeEventNote: $('#edge-event-note'),
@@ -38,7 +39,7 @@ async function api(path, options = {}) {
 
 function esc(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 function qs(key, value) { const u = new URL(location.href); value == null ? u.searchParams.delete(key) : u.searchParams.set(key, value); history.replaceState(null, '', u); }
-function dayMinute(minute) { const day = Math.floor(minute / 1440) + 1; const rest = minute % 1440; const h = Math.floor(rest / 60); const m = rest % 60; return `Jour ${day} · ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+function dayMinute(minute) { return formatGameDate(minute); }
 function statusClass(status) { return `status status-${status}`; }
 
 function setTab(name) {
@@ -58,15 +59,15 @@ function renderCampaigns() {
 
 function renderEvent(event) {
   const target = event.target_type ? `${esc(event.target_type)} #${event.target_id ?? '—'}` : 'global';
-  return `<div class="event-row"><div class="event-top"><span class="event-type">${esc(event.event_type)}</span><span>m.${event.game_minute}</span></div><div class="small">${target}${event.expedition_id ? ` · expedition #${event.expedition_id}` : ''}</div>${Object.keys(event.payload || {}).length ? `<div class="event-payload">${esc(JSON.stringify(event.payload))}</div>` : ''}${event.dm_note ? `<div class="small">MJ: ${esc(event.dm_note)}</div>` : ''}</div>`;
+  return `<div class="event-row"><div class="event-top"><span class="event-type">${esc(event.event_type)}</span><span>${formatGameDate(event.game_minute)}</span></div><div class="small">${target}${event.expedition_id ? ` · expedition #${event.expedition_id}` : ''}</div>${Object.keys(event.payload || {}).length ? `<div class="event-payload">${esc(JSON.stringify(event.payload))}</div>` : ''}${event.dm_note ? `<div class="small">MJ: ${esc(event.dm_note)}</div>` : ''}</div>`;
 }
 
 function renderOverview() {
   const d = state.dashboard;
   const active = d.expeditions.filter(e => e.status === 'ACTIVE');
-  ui.overviewExpeditions.innerHTML = active.map(e => `<div class="mini-row"><div class="record-head"><strong>${esc(e.name)}</strong><span class="${statusClass(e.status)}">${e.status}</span></div><div class="small">m.${e.current_game_minute} · ${e.current_q == null ? 'non positionnée' : `(${e.current_q}, ${e.current_r})`} · ${e.participants.length} perso.</div></div>`).join('') || '<div class="empty">Aucune expédition active.</div>';
+  ui.overviewExpeditions.innerHTML = active.map(e => `<div class="mini-row"><div class="record-head"><strong>${esc(e.name)}</strong><span class="${statusClass(e.status)}">${e.status}</span></div><div class="small">${formatGameDate(e.current_game_minute)} · ${e.current_q == null ? 'non positionnée' : `(${e.current_q}, ${e.current_r})`} · ${e.participants.length} perso.</div></div>`).join('') || '<div class="empty">Aucune expédition active.</div>';
   ui.overviewEvents.innerHTML = d.recent_events.slice(0, 6).map(renderEvent).join('') || '<div class="empty">Aucun WorldEvent.</div>';
-  ui.overviewMaps.innerHTML = d.maps.map(m => { const latest = m.versions[0]; return `<div class="map-chip"><strong>${esc(m.name)}</strong><div class="small">${m.versions.length} version(s)</div>${latest ? `<div class="small">Dernière: v${latest.version} · ${latest.hex_count} hex · m.${latest.effective_from_game_minute}</div>` : '<div class="small">Aucune version</div>'}</div>`; }).join('') || '<div class="empty">Aucune carte persistée.</div>';
+  ui.overviewMaps.innerHTML = d.maps.map(m => { const latest = m.versions[0]; return `<div class="map-chip"><strong>${esc(m.name)}</strong><div class="small">${m.versions.length} version(s)</div>${latest ? `<div class="small">Dernière: v${latest.version} · ${latest.hex_count} hex · ${formatGameDate(latest.effective_from_game_minute)}</div>` : '<div class="small">Aucune version</div>'}</div>`; }).join('') || '<div class="empty">Aucune carte persistée.</div>';
 }
 
 function renderPlanner() {
@@ -81,23 +82,48 @@ function renderPlanner() {
     }
   }
 
-  const versions = d.maps.flatMap(map => map.versions.map(version => ({ map, version })));
-  ui.planMapVersion.innerHTML = versions.map(({map, version}) =>
-    `<option value="${version.id}">${esc(map.name)} · v${version.version} · m.${version.effective_from_game_minute}</option>`
+  const previousMapId = Number(ui.planMap.value) || d.maps[0]?.id || null;
+  ui.planMap.innerHTML = d.maps.map(map => `<option value="${map.id}">${esc(map.name)}</option>`).join('');
+  if (previousMapId && d.maps.some(map => map.id === previousMapId)) ui.planMap.value = String(previousMapId);
+  const selectedMap = d.maps.find(map => map.id === Number(ui.planMap.value)) || d.maps[0] || null;
+  const previousVersionId = Number(ui.planMapVersion.value) || null;
+  const versions = selectedMap?.versions || [];
+  ui.planMapVersion.innerHTML = versions.map(version =>
+    `<option value="${version.id}">v${version.version}${version.name ? ` · ${esc(version.name)}` : ''} · ${formatGameDate(version.effective_from_game_minute)}</option>`
   ).join('');
+  if (previousVersionId && versions.some(v => v.id === previousVersionId)) ui.planMapVersion.value = String(previousVersionId);
+  const selectedVersion = versions.find(v => v.id === Number(ui.planMapVersion.value)) || versions[0] || null;
+  const hub = selectedVersion?.hub_poi_id ? {id:selectedVersion.hub_poi_id,name:selectedVersion.hub_name,q:selectedVersion.hub_q,r:selectedVersion.hub_r} : null;
+  ui.planHubSummary.classList.toggle('error', Boolean(selectedVersion && !hub));
+  ui.planHubSummary.innerHTML = !selectedMap ? 'Aucune carte persistée.'
+    : !selectedVersion ? 'Cette carte ne possède aucune version.'
+    : hub ? `<strong>Hub de départ :</strong> ${esc(hub.name)} · (${hub.q}, ${hub.r})`
+    : '<strong>Aucun hub défini.</strong> Ouvre l’Éditeur du monde et marque un POI comme « Hub de départ » pour cette version.';
 
-  ui.planCharacters.innerHTML = d.characters.map(character => {
-    const unavailable = assigned.has(character.id) || character.status !== 'ACTIVE';
-    const reason = assigned.has(character.id) ? 'déjà en expédition' : character.status !== 'ACTIVE' ? character.status : `m.${character.current_game_minute}`;
-    return `<label class="character-pick ${unavailable ? 'unavailable' : ''}"><input type="checkbox" value="${character.id}" ${unavailable ? 'disabled' : ''}><span><strong>${esc(character.name)}</strong><span class="small">${esc(reason)}</span></span></label>`;
-  }).join('') || '<div class="empty">Aucun personnage disponible.</div>';
+  const playerMembers = d.members.filter(member => member.role === 'PLAYER');
+  const playerCharacters = d.characters.filter(character => character.owner_role === 'PLAYER');
+  const availablePlayers = playerMembers.map(member => ({
+    member,
+    characters: playerCharacters.filter(character =>
+      character.owner_user_id === member.user_id
+      && character.status === 'ACTIVE'
+      && !assigned.has(character.id)
+    ),
+  })).filter(entry => entry.characters.length > 0);
 
-  if (!ui.planName.value) ui.planMinute.value = d.campaign_game_minute;
-  if (!versions.length) {
-    ui.plannerMessage.textContent = 'Aucune MapVersion persistée : crée d’abord un snapshot depuis l’éditeur.';
-  } else if (!ui.plannerMessage.classList.contains('error')) {
-    ui.plannerMessage.textContent = '';
+  ui.planCharacters.innerHTML = availablePlayers.map(({member, characters}) => {
+    const picks = characters.map(character =>
+      `<label class="character-pick"><input type="checkbox" value="${character.id}"><span><strong>${esc(character.name)}</strong><span class="small">horloge ${esc(formatGameDate(character.current_game_minute))}</span></span></label>`
+    ).join('');
+    return `<section class="planner-player"><div class="planner-player-head"><strong>${esc(member.username)}</strong><span class="small">joueur #${member.user_id}</span></div>${picks}</section>`;
+  }).join('') || '<div class="empty">Aucun personnage disponible pour une nouvelle expédition.</div>';
+
+  if (!ui.planName.value && !ui.planName.dataset.timeInitialized) {
+    setDateInputs('plan-time', d.campaign_game_minute);
+    ui.planName.dataset.timeInitialized = '1';
   }
+  if (!d.maps.length) ui.plannerMessage.textContent = 'Aucune carte persistée : crée d’abord une carte depuis l’éditeur.';
+  else if (!ui.plannerMessage.classList.contains('error')) ui.plannerMessage.textContent = '';
 }
 
 async function createExpeditionPlan(event) {
@@ -106,14 +132,14 @@ async function createExpeditionPlan(event) {
   const characterIds = [...ui.planCharacters.querySelectorAll('input[type="checkbox"]:checked')].map(input => Number(input.value));
   ui.plannerMessage.classList.remove('error');
   ui.plannerMessage.textContent = 'Création…';
+  let startMinute;
+  try { startMinute = gameMinuteFromDateInputs('plan-time'); }
+  catch (error) { ui.plannerMessage.classList.add('error'); ui.plannerMessage.textContent = error.message; return; }
   const payload = {
     name: ui.planName.value.trim(),
-    start_game_minute: Number(ui.planMinute.value),
+    start_game_minute: startMinute,
     character_ids: characterIds,
     map_version_id: Number(ui.planMapVersion.value),
-    q: Number(ui.planQ.value),
-    r: Number(ui.planR.value),
-    transport_key: ui.planTransport.value || null,
     start_now: ui.planStartNow.checked,
   };
   try {
@@ -122,7 +148,7 @@ async function createExpeditionPlan(event) {
     ui.planName.value = '';
     await refreshDashboard();
     ui.plannerMessage.classList.remove('error');
-    ui.plannerMessage.textContent = `Expédition #${created.expedition_id} créée (${created.status}).`;
+    ui.plannerMessage.textContent = `Expédition #${created.expedition_id} créée (${created.status}) · départ ${formatGameDate(created.start_game_minute)}.`;
   } catch (error) {
     ui.plannerMessage.classList.add('error');
     ui.plannerMessage.textContent = error.message;
@@ -131,7 +157,7 @@ async function createExpeditionPlan(event) {
 
 function renderExpeditions() {
   const d = state.dashboard;
-  ui.expeditionList.innerHTML = d.expeditions.map(e => `<div class="record ${e.id === state.expeditionId ? 'selected' : ''}" data-expedition="${e.id}"><div class="record-head"><strong>${esc(e.name)}</strong><span class="${statusClass(e.status)}">${e.status}</span></div><div class="record-meta"><span>#${e.id}</span><span>m.${e.current_game_minute}</span><span>${e.current_q == null ? 'sans position' : `(${e.current_q}, ${e.current_r})`}</span><span>${e.participants.length} participant(s)</span></div></div>`).join('') || '<div class="empty">Aucune expédition.</div>';
+  ui.expeditionList.innerHTML = d.expeditions.map(e => `<div class="record ${e.id === state.expeditionId ? 'selected' : ''}" data-expedition="${e.id}"><div class="record-head"><strong>${esc(e.name)}</strong><span class="${statusClass(e.status)}">${e.status}</span></div><div class="record-meta"><span>#${e.id}</span><span>${formatGameDate(e.current_game_minute)}</span><span>${e.current_q == null ? 'sans position' : `(${e.current_q}, ${e.current_r})`}</span><span>${e.participants.length} participant(s)</span></div></div>`).join('') || '<div class="empty">Aucune expédition.</div>';
   $$('[data-expedition]').forEach(el => el.addEventListener('click', () => { state.expeditionId = Number(el.dataset.expedition); renderExpeditions(); renderExpeditionDetail(); }));
   renderExpeditionDetail();
 }
@@ -142,10 +168,10 @@ function renderExpeditionDetail() {
   const map = state.dashboard.maps.flatMap(m => m.versions.map(v => ({map:m, version:v}))).find(x => x.version.id === e.current_map_version_id);
   const canStart = e.status === 'PLANNING'; const canReturn = e.status === 'ACTIVE';
   ui.expeditionDetail.innerHTML = `<div class="eyebrow">Expédition #${e.id}</div><h3>${esc(e.name)}</h3><span class="${statusClass(e.status)}">${e.status}</span>
-    <div class="detail-section"><div class="small">Départ</div><strong>m.${e.start_game_minute}</strong><div class="small">Horloge actuelle</div><strong>m.${e.current_game_minute} · ${dayMinute(e.current_game_minute)}</strong></div>
+    <div class="detail-section"><div class="small">Départ</div><strong>${formatGameDate(e.start_game_minute)}</strong><div class="small">Horloge actuelle</div><strong>${formatGameDate(e.current_game_minute)} · ${dayMinute(e.current_game_minute)}</strong></div>
     <div class="detail-section"><div class="small">Position</div><strong>${e.current_q == null ? 'Non positionnée' : `(${e.current_q}, ${e.current_r})`}</strong><div class="small">Carte</div><strong>${map ? `${esc(map.map.name)} · v${map.version.version}` : (e.current_map_version_id ? `MapVersion #${e.current_map_version_id}` : '—')}</strong><div class="small">Météo / transport</div><strong>${esc(e.weather_key || '—')} / ${esc(e.transport_key || '—')}</strong></div>
-    <div class="detail-section"><strong>Participants</strong>${e.participants.map(p => `<div class="participant"><span>${esc(p.character_name)} <span class="small">#${p.character_id}</span></span><span>${p.left_game_minute == null ? 'présent' : `sorti m.${p.left_game_minute}`}</span></div>`).join('') || '<div class="empty">Aucun participant.</div>'}</div>
-    <div class="detail-actions">${canStart ? '<button id="action-start">Démarrer</button>' : ''}${canReturn ? '<button id="action-return">Retour au hub</button>' : ''}${e.current_map_version_id && e.current_q != null ? `<a class="button-link" href="/player.html?expedition=${e.id}">Voir carte joueur</a>` : ''}<a class="button-link" href="/timeline.html?campaign_id=${state.campaignId}">Timeline</a></div>
+    <div class="detail-section"><strong>Participants</strong>${e.participants.map(p => `<div class="participant"><span>${esc(p.character_name)} <span class="small">#${p.character_id}</span></span><span>${p.left_game_minute == null ? 'présent' : `sorti ${formatGameDate(p.left_game_minute)}`}</span></div>`).join('') || '<div class="empty">Aucun participant.</div>'}</div>
+    <div class="detail-actions">${canStart ? '<button id="action-start">Démarrer</button>' : ''}${canReturn ? '<button id="action-return">Retour au hub</button>' : ''}${e.current_map_version_id && e.current_q != null ? `<a class="button-link" href="/dm_expedition.html?user=${state.userId}&campaign=${state.campaignId}&expedition=${e.id}">Carte d'expédition MJ</a><a class="button-link" target="_blank" rel="noopener" href="/player.html?expedition=${e.id}&display=1&user=${state.userId}">Carte joueur ↗</a>` : ''}<a class="button-link" href="/timeline.html?campaign_id=${state.campaignId}">Timeline</a></div>
     <p id="expedition-action-message" class="error"></p>`;
   $('#action-start')?.addEventListener('click', () => expeditionAction('start'));
   $('#action-return')?.addEventListener('click', () => expeditionAction('return'));
@@ -158,7 +184,7 @@ async function expeditionAction(action) {
 }
 
 function renderMaps() {
-  ui.mapsList.innerHTML = state.dashboard.maps.map(m => `<article class="map-card"><div class="map-title"><div><strong>${esc(m.name)}</strong><div class="small">Map #${m.id}${m.description ? ` · ${esc(m.description)}` : ''}</div></div><div class="map-title-actions"><span class="badge">${m.versions.length} version(s)</span><button type="button" class="ghost danger-outline" data-delete-map="${m.id}" data-map-name="${esc(m.name)}">Supprimer</button></div></div><table class="version-table"><thead><tr><th>Version</th><th>Effective</th><th>Taille</th><th>Hex</th><th>POI</th><th>Edges</th><th>Actions</th></tr></thead><tbody>${m.versions.map(v => `<tr><td>v${v.version}${v.name ? ` · ${esc(v.name)}` : ''} <span class="small">#${v.id}</span></td><td>m.${v.effective_from_game_minute}</td><td>${v.width}×${v.height} · ${v.hex_size}px</td><td>${v.hex_count}</td><td>${v.poi_count}</td><td>${v.edge_count}</td><td><div class="map-version-actions"><a class="button-link compact" href="/?user=${state.userId}&campaign=${state.campaignId}&map=${m.id}&version=${v.id}">Terrain</a><a class="button-link compact" href="/world.html?user=${state.userId}&campaign=${state.campaignId}&version=${v.id}">Monde</a><div class="export-links" aria-label="Exporter la version"><span class="export-label">Monde</span><a class="export-format" href="/api/campaigns/${state.campaignId}/dm-map-versions/${v.id}/export?user_id=${state.userId}&format=png&mode=world">PNG</a><a class="export-format" href="/api/campaigns/${state.campaignId}/dm-map-versions/${v.id}/export?user_id=${state.userId}&format=jpeg&mode=world">JPEG</a><a class="export-format" href="/api/campaigns/${state.campaignId}/dm-map-versions/${v.id}/export?user_id=${state.userId}&format=pdf&mode=world">PDF</a><span class="export-label">Terrain</span><a class="export-format" href="/api/campaigns/${state.campaignId}/dm-map-versions/${v.id}/export?user_id=${state.userId}&format=png&mode=terrain">PNG</a><a class="export-format" href="/api/campaigns/${state.campaignId}/dm-map-versions/${v.id}/export?user_id=${state.userId}&format=jpeg&mode=terrain">JPEG</a><a class="export-format" href="/api/campaigns/${state.campaignId}/dm-map-versions/${v.id}/export?user_id=${state.userId}&format=pdf&mode=terrain">PDF</a></div></div></td></tr>`).join('')}</tbody></table></article>`).join('') || '<div class="empty">Aucune carte persistée pour cette campagne.</div>';
+  ui.mapsList.innerHTML = state.dashboard.maps.map(m => `<article class="map-card"><div class="map-title"><div><strong>${esc(m.name)}</strong><div class="small">Map #${m.id}${m.description ? ` · ${esc(m.description)}` : ''}</div></div><div class="map-title-actions"><span class="badge">${m.versions.length} version(s)</span><button type="button" class="ghost danger-outline" data-delete-map="${m.id}" data-map-name="${esc(m.name)}">Supprimer</button></div></div><table class="version-table"><thead><tr><th>Version</th><th>Effective</th><th>Hub</th><th>Taille</th><th>Hex</th><th>POI</th><th>Edges</th><th>Actions</th></tr></thead><tbody>${m.versions.map(v => `<tr><td>v${v.version}${v.name ? ` · ${esc(v.name)}` : ''} <span class="small">#${v.id}</span></td><td>${formatGameDate(v.effective_from_game_minute)}</td><td>${v.hub_poi_id ? `${esc(v.hub_name)} (${v.hub_q}, ${v.hub_r})` : `<span class="muted">Non défini</span>`}</td><td>${v.width}×${v.height} · ${v.hex_size}px</td><td>${v.hex_count}</td><td>${v.poi_count}</td><td>${v.edge_count}</td><td><div class="map-version-actions"><a class="button-link compact" href="/?user=${state.userId}&campaign=${state.campaignId}&map=${m.id}&version=${v.id}">Terrain</a><a class="button-link compact" href="/world.html?user=${state.userId}&campaign=${state.campaignId}&version=${v.id}">Monde</a><div class="export-links" aria-label="Exporter la version"><span class="export-label">Monde</span><a class="export-format" href="/api/campaigns/${state.campaignId}/dm-map-versions/${v.id}/export?user_id=${state.userId}&format=png&mode=world">PNG</a><a class="export-format" href="/api/campaigns/${state.campaignId}/dm-map-versions/${v.id}/export?user_id=${state.userId}&format=jpeg&mode=world">JPEG</a><a class="export-format" href="/api/campaigns/${state.campaignId}/dm-map-versions/${v.id}/export?user_id=${state.userId}&format=pdf&mode=world">PDF</a><span class="export-label">Terrain</span><a class="export-format" href="/api/campaigns/${state.campaignId}/dm-map-versions/${v.id}/export?user_id=${state.userId}&format=png&mode=terrain">PNG</a><a class="export-format" href="/api/campaigns/${state.campaignId}/dm-map-versions/${v.id}/export?user_id=${state.userId}&format=jpeg&mode=terrain">JPEG</a><a class="export-format" href="/api/campaigns/${state.campaignId}/dm-map-versions/${v.id}/export?user_id=${state.userId}&format=pdf&mode=terrain">PDF</a></div></div></td></tr>`).join('')}</tbody></table></article>`).join('') || '<div class="empty">Aucune carte persistée pour cette campagne.</div>';
   ui.mapsList.querySelectorAll('[data-delete-map]').forEach(btn => btn.addEventListener('click', () => deleteMap(Number(btn.dataset.deleteMap), btn.dataset.mapName)));
   renderWorkbenchVersionOptions();
 }
@@ -209,12 +235,12 @@ async function addMember(event) {
 
 async function inspectWorld() {
   if (!state.dashboard) return;
-  const minute = Number(ui.worldMinute.value); if (!Number.isFinite(minute) || minute < 0) return;
+  let minute; try { minute = gameMinuteFromDateInputs('world-inspect'); ui.worldMinute.value = String(minute); } catch (e) { ui.worldSummary.innerHTML = `<p class="error">${esc(e.message)}</p>`; return; }
   ui.worldSummary.innerHTML = '<p class="muted">Résolution…</p>';
   try {
     const w = await api(`/api/campaigns/${state.campaignId}/world-state?game_minute=${minute}`);
     ui.worldSummary.dataset.loaded = '1';
-    ui.worldSummary.innerHTML = `<div class="eyebrow">World Truth @ minute ${w.game_minute}</div><strong>${w.weather_key ? `Météo : ${esc(w.weather_key)}` : 'Aucune météo globale résolue'}</strong><div class="small">${dayMinute(w.game_minute)} · ${w.latest_global_events.length} global · ${w.latest_target_events.length} ciblé(s)</div>`;
+    ui.worldSummary.innerHTML = `<div class="eyebrow">World Truth · ${formatGameDate(w.game_minute)}</div><strong>${w.weather_key ? `Météo : ${esc(w.weather_key)}` : 'Aucune météo globale résolue'}</strong><div class="small">${dayMinute(w.game_minute)} · ${w.latest_global_events.length} global · ${w.latest_target_events.length} ciblé(s)</div>`;
     ui.worldGlobal.innerHTML = w.latest_global_events.map(renderEvent).join('') || '<div class="empty">Aucun événement global applicable.</div>';
     ui.worldTargets.innerHTML = w.latest_target_events.map(renderEvent).join('') || '<div class="empty">Aucun état ciblé applicable.</div>';
   } catch (e) { ui.worldSummary.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
@@ -301,14 +327,14 @@ function renderDashboard() {
   ui.empty.classList.add('hidden'); ui.stats.classList.remove('hidden');
   $$('[data-panel]').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== state.tab));
   ui.campaignTitle.textContent = d.campaign.name; ui.campaignDescription.textContent = d.campaign.description || 'Aucune description.';
-  ui.campaignMinute.textContent = d.campaign_game_minute; ui.campaignDay.textContent = `${d.campaign.epoch_name} · ${dayMinute(d.campaign_game_minute)}`;
+  ui.campaignMinute.textContent = formatGameDate(d.campaign_game_minute); ui.campaignDay.textContent = d.campaign.epoch_name;
   ui.statExpeditions.textContent = d.active_expedition_count; ui.statCharacters.textContent = d.character_count; ui.statMaps.textContent = d.map_count; ui.statEvents.textContent = d.recent_events.length;
   ui.campaignActions.innerHTML = `<button type="button" class="secondary" id="edit-campaign">Modifier</button><button type="button" class="danger" id="delete-campaign">Supprimer</button><a class="button-link" href="/timeline.html?campaign_id=${d.campaign.id}">Timeline</a><a class="button-link" href="/?user=${state.userId}&campaign=${d.campaign.id}">Map editor</a><a class="button-link" href="/world.html?user=${state.userId}&campaign=${d.campaign.id}">World editor</a><a class="button-link" href="/dashboard.html?user=${state.userId}&campaign=${d.campaign.id}">Vue joueur</a>`;
   $('#edit-campaign')?.addEventListener('click', openCampaignEditor);
   $('#delete-campaign')?.addEventListener('click', deleteCurrentCampaign);
   if (ui.mapEditorOpen) ui.mapEditorOpen.href = `/?user=${state.userId}&campaign=${d.campaign.id}`;
   if (ui.worldEditorOpen) ui.worldEditorOpen.href = `/world.html?user=${state.userId}&campaign=${d.campaign.id}`;
-  ui.worldMinute.value = d.campaign_game_minute; delete ui.worldSummary.dataset.loaded;
+  ui.worldMinute.value = d.campaign_game_minute; setDateInputs('world-inspect', d.campaign_game_minute); delete ui.worldSummary.dataset.loaded;
   if (!state.expeditionId || !d.expeditions.some(e => e.id === state.expeditionId)) state.expeditionId = d.expeditions.find(e => e.status === 'ACTIVE')?.id || d.expeditions[0]?.id || null;
   renderOverview(); renderPlanner(); renderExpeditions(); renderMaps(); renderCharacters(); if (state.tab === 'timeline') loadTimeline();
 }
@@ -350,6 +376,8 @@ ui.togglePlanner.addEventListener('click', () => {
   if (!hidden) renderPlanner();
 });
 ui.plannerForm.addEventListener('submit', createExpeditionPlan);
+ui.planMap.addEventListener('change', renderPlanner);
+ui.planMapVersion.addEventListener('change', renderPlanner);
 ui.memberForm?.addEventListener('submit', addMember);
 ui.refreshInvitations?.addEventListener('click', refreshInvitations);
 ui.refreshExpeditions.addEventListener('click', refreshDashboard); ui.inspectWorld.addEventListener('click', inspectWorld); ui.useCurrentMinute.addEventListener('click', () => { if (state.dashboard) { ui.worldMinute.value = state.dashboard.campaign_game_minute; inspectWorld(); } });
@@ -391,7 +419,7 @@ function renderWorkbenchVersionOptions() {
   const current = Number(ui.workbenchVersion.value);
   const versions = state.dashboard.maps.flatMap(map => map.versions.map(version => ({map, version})));
   ui.workbenchVersion.innerHTML = versions.map(({map, version}) =>
-    `<option value="${version.id}">${esc(map.name)} · v${version.version} · m.${version.effective_from_game_minute}</option>`
+    `<option value="${version.id}">${esc(map.name)} · v${version.version} · ${formatGameDate(version.effective_from_game_minute)}</option>`
   ).join('');
   if (versions.some(x => x.version.id === current)) ui.workbenchVersion.value = String(current);
   if (!versions.length) ui.workbenchMessage.textContent = 'Persiste d’abord une carte depuis l’éditeur terrain.';
@@ -449,9 +477,9 @@ function syncPrimarySelectedHex(){state.selectedHex=state.selectedHexes.length?s
 function setHexSelection(h,{additive=false}={}){if(!h)return;if(!additive){state.selectedHexes=[h];}else{const index=state.selectedHexes.findIndex(x=>sameHex(x,h));if(index>=0)state.selectedHexes.splice(index,1);else state.selectedHexes.push(h);}syncPrimarySelectedHex();state.selectedPoiId=null;renderSelectedHex();updateEdgeSelection();drawWorkbench();}
 function clearHexSelection(){state.selectedHexes=[];state.selectedHex=null;state.selectedPoiId=null;renderSelectedHex();updateEdgeSelection();drawWorkbench();}
 function renderSelectedHex(){const selected=state.selectedHexes;if(!selected.length){ui.selectedHex.innerHTML='Aucun hex sélectionné.<div class="small">Clic : nouvelle sélection · Ctrl+clic : ajouter/retirer · Esc : effacer.</div>';renderPoiList();return;}if(selected.length>1){ui.selectedHex.innerHTML=`<strong>${selected.length} hex sélectionnés</strong><div class="small">${selected.map(h=>`(${h.q}, ${h.r})`).join(' · ')}</div><div class="small">Ctrl+clic ajoute/retire un hex · Esc efface la sélection.</div>`;renderPoiList();return;}const h=selected[0];const pois=(state.mapWorkbench?.pois||[]).filter(p=>p.q===h.q&&p.r===h.r);ui.selectedHex.innerHTML=`<strong>(${h.q}, ${h.r}) · ${esc(h.terrain_key)}</strong><div class="small">${h.id?`Hex #${h.id}`:'Hex par défaut'} · élévation ${h.elevation} · visibilité ${h.visibility_score} · coût ${h.travel_cost}</div><div class="small">${pois.length} POI sur cet hex.</div>`;renderPoiList();}
-function renderPoiList(){const all=state.mapWorkbench?.pois||[];if(state.selectedHexes.length>1){ui.poiList.innerHTML='<div class="empty">Sélection multiple active : garde un seul hex pour gérer ses POI.</div>';return;}const h=state.selectedHexes[0];const rows=h?all.filter(p=>p.q===h.q&&p.r===h.r):all;ui.poiList.innerHTML=rows.map(p=>`<button type="button" class="feature-row ${p.id===state.selectedPoiId?'selected':''}" data-poi="${p.id}"><strong>${esc(p.name)}</strong><span>${esc(p.kind||'POI')} · identité POI #${p.feature_id} · row #${p.id}${p.is_landmark?' · landmark':''}</span></button>`).join('')||(h?'<div class="empty">Aucun POI sur cet hex.</div>':'<div class="empty">Aucun POI sur cette carte.</div>');ui.poiList.querySelectorAll('[data-poi]').forEach(el=>el.addEventListener('click',()=>selectPoi(Number(el.dataset.poi))));}
-function selectPoi(id){const p=state.mapWorkbench?.pois.find(x=>x.id===id);if(!p)return;const h=state.mapWorkbench.hexes.find(h=>h.id===p.hex_id)||wbVirtualHex(p.q,p.r);state.selectedPoiId=id;if(h){state.selectedHexes=[h];syncPrimarySelectedHex();}ui.poiId.value=p.id;ui.poiName.value=p.name;ui.poiKind.value=p.kind||'';ui.poiDescription.value=p.dm_description||'';ui.poiLandmark.checked=p.is_landmark;renderSelectedHex();updateEdgeSelection();drawWorkbench();}
-function clearPoiForm(){state.selectedPoiId=null;ui.poiId.value='';ui.poiName.value='';ui.poiKind.value='';ui.poiDescription.value='';ui.poiLandmark.checked=false;renderPoiList();drawWorkbench();}
+function renderPoiList(){const all=state.mapWorkbench?.pois||[];if(state.selectedHexes.length>1){ui.poiList.innerHTML='<div class="empty">Sélection multiple active : garde un seul hex pour gérer ses POI.</div>';return;}const h=state.selectedHexes[0];const rows=h?all.filter(p=>p.q===h.q&&p.r===h.r):all;ui.poiList.innerHTML=rows.map(p=>`<button type="button" class="feature-row ${p.id===state.selectedPoiId?'selected':''}" data-poi="${p.id}"><strong>${esc(p.name)}</strong><span>${esc(p.kind||'POI')} · identité POI #${p.feature_id} · row #${p.id}${p.is_landmark?' · landmark':''}${p.is_hub?' · HUB':''}</span></button>`).join('')||(h?'<div class="empty">Aucun POI sur cet hex.</div>':'<div class="empty">Aucun POI sur cette carte.</div>');ui.poiList.querySelectorAll('[data-poi]').forEach(el=>el.addEventListener('click',()=>selectPoi(Number(el.dataset.poi))));}
+function selectPoi(id){const p=state.mapWorkbench?.pois.find(x=>x.id===id);if(!p)return;const h=state.mapWorkbench.hexes.find(h=>h.id===p.hex_id)||wbVirtualHex(p.q,p.r);state.selectedPoiId=id;if(h){state.selectedHexes=[h];syncPrimarySelectedHex();}ui.poiId.value=p.id;ui.poiName.value=p.name;ui.poiKind.value=p.kind||'';ui.poiDescription.value=p.dm_description||'';ui.poiLandmark.checked=p.is_landmark;ui.poiHub.checked=Boolean(p.is_hub);renderSelectedHex();updateEdgeSelection();drawWorkbench();}
+function clearPoiForm(){state.selectedPoiId=null;ui.poiId.value='';ui.poiName.value='';ui.poiKind.value='';ui.poiDescription.value='';ui.poiLandmark.checked=false;ui.poiHub.checked=false;renderPoiList();drawWorkbench();}
 function renderEdgeList(){const edges=state.mapWorkbench?.edges||[];const groups=new Map();for(const e of edges){const key=`${e.feature_type}:${e.feature_id}`;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(e);}ui.edgeList.innerHTML=[...groups.values()].map(group=>{group.sort((a,b)=>(a.segment_index??0)-(b.segment_index??0));const first=group[0],selected=group.some(e=>e.id===state.selectedEdgeId);return `<button type="button" class="feature-row ${selected?'selected':''}" data-edge="${first.id}"><strong>${esc(first.name||first.feature_type)}</strong><span>${first.feature_type} #${first.feature_id} · ${group.length} segment(s)</span></button>`;}).join('')||'<div class="empty">Aucune feature linéaire.</div>';ui.edgeList.querySelectorAll('[data-edge]').forEach(el=>el.addEventListener('click',()=>{state.selectedEdgeId=Number(el.dataset.edge);renderEdgeList();drawWorkbench();}));}
 function renderAreaList(){const areas=state.mapWorkbench?.areas||[];ui.areaList.innerHTML=areas.map(a=>`<div class="feature-row"><strong>${esc(a.name||a.feature_type)}</strong><span>${a.feature_type} #${a.feature_id} · ${(a.cells||[]).length} hex</span></div>`).join('')||'<div class="empty">Aucune zone sémantique.</div>';}
 function updateEdgeSelection(){const selected=state.selectedHexes;if(!selected.length){ui.edgeSelection.textContent='Sélectionne au moins deux waypoints avec Ctrl+clic.';return;}if(selected.length===1){ui.edgeSelection.textContent=`Départ (${selected[0].q}, ${selected[0].r}) · ajoute un waypoint avec Ctrl+clic.`;return;}ui.edgeSelection.textContent=`${selected.length} waypoint(s) ordonnés · ${selected.map(h=>`(${h.q},${h.r})`).join(' → ')}`;}
@@ -465,12 +493,12 @@ async function loadMapWorkbench({fit=true}={}){
 async function savePoi(event){
   event.preventDefault();
   if(state.selectedHexes.length!==1)return void(ui.workbenchMessage.textContent='Sélectionne exactement un hex pour créer ou modifier un POI.');
-  const payload={name:ui.poiName.value.trim(),kind:ui.poiKind.value.trim()||null,dm_description:ui.poiDescription.value.trim()||null,is_landmark:ui.poiLandmark.checked};
+  const payload={name:ui.poiName.value.trim(),kind:ui.poiKind.value.trim()||null,dm_description:ui.poiDescription.value.trim()||null,is_landmark:ui.poiLandmark.checked,is_hub:ui.poiHub.checked};
   try{
     if(state.selectedPoiId){
       const previous=state.mapWorkbench?.pois.find(p=>p.id===state.selectedPoiId);
       const result=await api(`/api/campaigns/${state.campaignId}/dm-pois/${state.selectedPoiId}?user_id=${state.userId}`,{method:'PATCH',body:JSON.stringify(payload)});
-      if(previous)state.poiUndoStack.push({type:'update',poiId:result.id,before:{name:previous.name,kind:previous.kind,dm_description:previous.dm_description,is_landmark:previous.is_landmark},after:payload});
+      if(previous)state.poiUndoStack.push({type:'update',poiId:result.id,before:{name:previous.name,kind:previous.kind,dm_description:previous.dm_description,is_landmark:previous.is_landmark,is_hub:previous.is_hub},after:payload});
     }else{
       const q=state.selectedHex.q,r=state.selectedHex.r;
       const result=await api(`/api/campaigns/${state.campaignId}/dm-map-versions/${state.mapWorkbench.map_version_id}/pois?user_id=${state.userId}`,{method:'POST',body:JSON.stringify({...payload,q,r})});

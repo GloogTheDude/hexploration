@@ -50,6 +50,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    ping_color: Mapped[str] = mapped_column(String(7), default="#ff4f64")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     memberships: Mapped[list[CampaignMembership]] = relationship(back_populates="user")
@@ -324,7 +325,10 @@ class PointOfInterest(Base):
     name: Mapped[str] = mapped_column(String(160))
     kind: Mapped[str | None] = mapped_column(String(80))
     dm_description: Mapped[str | None] = mapped_column(Text())
+    player_description: Mapped[str | None] = mapped_column(Text())
+    requires_discovery: Mapped[bool] = mapped_column(Boolean(), default=False)
     is_landmark: Mapped[bool] = mapped_column(Boolean(), default=False)
+    is_hub: Mapped[bool] = mapped_column(Boolean(), default=False, index=True)
 
     hex: Mapped[MapHex] = relationship(back_populates="pois")
 
@@ -348,6 +352,16 @@ class Expedition(Base):
     current_r: Mapped[int | None] = mapped_column(Integer())
     weather_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
     transport_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    ping_q: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    ping_r: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    ping_game_minute: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    ping_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    ping_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dm_ping_q: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    dm_ping_r: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    dm_ping_game_minute: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    dm_ping_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    dm_ping_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     campaign: Mapped[Campaign] = relationship(back_populates="expeditions")

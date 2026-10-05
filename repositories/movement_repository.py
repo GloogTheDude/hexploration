@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 
 from db.models import (
@@ -12,6 +12,8 @@ from db.models import (
     MapVersion,
     Movement,
     WorldMap,
+    CharacterKnowledgeObservation,
+    CharacterMapHexObservation,
 )
 
 
@@ -108,3 +110,30 @@ class MovementRepository:
 
     def get_character(self, character_id: int) -> Character | None:
         return self.db.get(Character, character_id)
+
+
+    def latest_movement(self, expedition_id: int) -> Movement | None:
+        stmt = (
+            select(Movement)
+            .where(Movement.expedition_id == expedition_id)
+            .order_by(Movement.arrival_game_minute.desc(), Movement.id.desc())
+            .limit(1)
+        )
+        return self.db.scalar(stmt)
+
+    def remove_auto_observations_for_arrival(self, expedition_id: int, game_minute: int) -> None:
+        # Map observations are only produced by automatic visibility scans.
+        self.db.execute(
+            delete(CharacterMapHexObservation).where(
+                CharacterMapHexObservation.expedition_id == expedition_id,
+                CharacterMapHexObservation.observed_game_minute == game_minute,
+            )
+        )
+        # Preserve explicit DM discoveries/reveals (source_type=DISCOVERY).
+        self.db.execute(
+            delete(CharacterKnowledgeObservation).where(
+                CharacterKnowledgeObservation.expedition_id == expedition_id,
+                CharacterKnowledgeObservation.observed_game_minute == game_minute,
+                CharacterKnowledgeObservation.source_type == "AUTO_VISIBILITY",
+            )
+        )

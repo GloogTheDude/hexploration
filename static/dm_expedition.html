@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hexploration — Carte d'expédition MJ</title>
+<link rel="stylesheet" href="/css/dm_expedition.css">
+<script type="module" src="/js/dm_expedition.js?v=492"></script>
+</head>
+<body>
+<header class="topbar"><div><div class="eyebrow">SESSION MJ</div><h1 id="title">Carte d'expédition</h1><p id="clock">Chargement…</p></div><div class="actions"><a id="player-map" target="_blank" rel="noopener">Ouvrir la carte joueur ↗</a><a id="back-dm" href="/dm.html">Dashboard MJ</a></div></header>
+<main class="layout">
+  <aside class="panel controls">
+    <section><h2>Tour d'hexploration</h2><div id="position" class="info"></div><div id="ping" class="ping-box">Aucun ping joueur.</div></section>
+    <section><h2>Hex sélectionné</h2><div id="selection" class="info">Clique un hex.</div>
+      <div class="dm-ping-controls"><label>Couleur ping MJ <input id="dm-ping-color" type="color" value="#55c7ff" aria-label="Couleur du ping MJ"></label><button id="dm-ping" type="button" disabled>◆ Ping MJ</button></div>
+      <div class="duration"><span>Durée de base</span><label>Jours<input id="duration-days" type="number" min="0" value="0"></label><label>Heures<input id="duration-hours" type="number" min="0" max="23" value="1"></label><label>Minutes<input id="duration-minutes" type="number" min="0" max="59" value="0"></label></div><button id="move" disabled>Déplacer l'expédition</button><p id="move-message" class="message"></p></section>
+    <section><h2>Vision joueurs</h2><div class="legend"><span><i class="v visible"></i>VISIBLE maintenant</span><span><i class="v seen"></i>VU / mémoire</span><span><i class="v unknown"></i>inconnu des joueurs</span></div><p class="small">Le MJ voit la vérité complète ; le contour clair reproduit exactement le champ de vision actuel des joueurs.</p></section>
+    <section><h2>Affichage MJ</h2><label class="toggle-row"><input id="show-hidden-pois" type="checkbox" checked> Afficher les POI cachés / non découverts</label><p class="small">Masque-les pour alléger la carte sans modifier la connaissance des joueurs.</p></section>
+    <section><h2>Historique mouvement</h2><div class="history-actions"><button id="undo-move" type="button">↶ Annuler</button><button id="redo-move" type="button" disabled>↷ Refaire</button></div><p class="small">Ctrl+Z / Ctrl+Y. L'annulation restaure position, horloge et observations automatiques.</p></section>
+  </aside>
+  <section class="map-wrap"><canvas id="map" width="1200" height="780"></canvas><div class="mapbar"><button id="fit">Recentrer</button><button id="refresh">Actualiser</button><span>clic: sélectionner · glisser: déplacer · molette: zoom</span></div></section>
+  <aside class="panel poi-panel"><div class="poi-head"><h2>POI de la carte</h2><span id="poi-count"></span></div><div id="poi-list" class="poi-list"></div><section id="poi-detail" class="poi-detail"><p class="muted">Sélectionne un POI.</p></section></aside>
+</main>
+<div id="toast" class="toast hidden"></div>
+</body></html>

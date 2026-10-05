@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hexploration — DM Dashboard</title>
   <link rel="stylesheet" href="/css/dm.css">
-  <script type="module" src="/js/dm.js?v=390"></script>
+  <script type="module" src="/js/dm.js?v=460"></script>
 </head>
 <body>
 <header class="topbar">
@@ -105,19 +105,24 @@
       <section id="tab-expeditions" class="tab-panel hidden" data-panel="expeditions">
         <section class="expedition-planner">
           <div class="planner-head">
-            <div><div class="eyebrow">Préparation</div><h3>Nouvelle expédition</h3><p class="muted">Compose le groupe, place-le sur une version de carte et démarre-le immédiatement ou garde-le en planning.</p></div>
+            <div><div class="eyebrow">Préparation</div><h3>Nouvelle expédition</h3><p class="muted">Le MJ compose l'expédition avec les personnages des joueurs inscrits à la campagne, choisit la carte et sa version. Le départ est automatiquement le POI marqué comme hub.</p></div>
             <button id="toggle-planner" class="secondary">Afficher le planner</button>
           </div>
           <form id="expedition-planner-form" class="planner-form hidden">
-            <div class="planner-grid">
-              <label>Nom<input id="plan-name" maxlength="160" placeholder="Expédition du Nord" required></label>
-              <label>Minute de départ<input id="plan-minute" type="number" min="0" value="0" required></label>
-              <label>Version de carte<select id="plan-map-version" required></select></label>
-              <label>Transport<select id="plan-transport"><option value="FOOT">À pied</option><option value="HORSE">Cheval</option><option value="CART">Chariot</option><option value="BOAT">Bateau</option></select></label>
-              <label>Q<input id="plan-q" type="number" value="0" required></label>
-              <label>R<input id="plan-r" type="number" value="0" required></label>
+            <div class="planner-grid planner-grid-clean">
+              <label class="planner-name">Nom<input id="plan-name" maxlength="160" placeholder="Expédition du Nord" required></label>
+              <label>Carte<select id="plan-map" required></select></label>
+              <label>Version<select id="plan-map-version" required></select></label>
             </div>
-            <fieldset class="planner-characters"><legend>Personnages disponibles</legend><div id="plan-characters" class="character-picks"></div></fieldset>
+            <fieldset class="planner-date"><legend>Date de départ</legend><div class="game-date-grid">
+              <label>Année<input id="plan-time-year" type="number" min="0" value="0" required></label>
+              <label>Mois<input id="plan-time-month" type="number" min="1" max="12" value="1" required></label>
+              <label>Jour<input id="plan-time-day" type="number" min="1" max="30" value="1" required></label>
+              <label>Heure<input id="plan-time-hour" type="number" min="0" max="23" value="0" required></label>
+              <label>Minute<input id="plan-time-minute" type="number" min="0" max="59" value="0" required></label>
+            </div></fieldset>
+            <div id="plan-hub-summary" class="hub-summary muted">Sélectionne une carte/version.</div>
+            <fieldset class="planner-characters"><legend>Joueurs inscrits & personnages disponibles</legend><div id="plan-characters" class="character-picks"></div></fieldset>
             <label class="check-row"><input id="plan-start-now" type="checkbox" checked> Démarrer immédiatement après création</label>
             <div class="planner-actions"><button type="submit">Créer l'expédition</button><span id="planner-message" class="muted"></span></div>
           </form>
@@ -133,11 +138,11 @@
 
       <section id="tab-world" class="tab-panel hidden" data-panel="world">
         <div class="world-toolbar">
-          <label>Minute de campagne <input id="world-minute" type="number" min="0" value="0"></label>
+          <input id="world-minute" type="hidden" value="0"><div class="game-date-grid world-inspect-date"><label>Année<input id="world-inspect-year" type="number" min="0" value="0"></label><label>Mois<input id="world-inspect-month" type="number" min="1" max="12" value="1"></label><label>Jour<input id="world-inspect-day" type="number" min="1" max="30" value="1"></label><label>Heure<input id="world-inspect-hour" type="number" min="0" max="23" value="0"></label><label>Minute<input id="world-inspect-minute" type="number" min="0" max="59" value="0"></label></div>
           <button id="inspect-world">Résoudre l’état</button>
           <button id="use-current-minute" class="secondary">Utiliser l’horloge</button>
         </div>
-        <div id="world-summary" class="world-summary"><p class="muted">Choisis une minute pour inspecter la World Truth.</p></div>
+        <div id="world-summary" class="world-summary"><p class="muted">Choisis une date pour inspecter la World Truth.</p></div>
         <div class="world-columns">
           <article class="block"><h3>Événements globaux résolus</h3><div id="world-global" class="list"></div></article>
           <article class="block"><h3>États ciblés résolus</h3><div id="world-targets" class="list"></div></article>
@@ -176,7 +181,7 @@
                   <input id="poi-id" type="hidden">
                   <label>Nom<input id="poi-name" maxlength="160" required></label>
                   <label>Type<input id="poi-kind" maxlength="80" placeholder="RUIN, TOWN, SHRINE…"></label>
-                  <label class="check-row"><input id="poi-landmark" type="checkbox"> Landmark visible à distance</label>
+                  <label class="check-row"><input id="poi-landmark" type="checkbox"> Landmark visible à distance</label><label class="check-row"><input id="poi-hub" type="checkbox"> Hub de départ</label>
                   <label>Description MJ<textarea id="poi-description" rows="3"></textarea></label>
                   <button type="submit">Enregistrer le POI</button>
                 </form>

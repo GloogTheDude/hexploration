@@ -1,3 +1,4 @@
+import { formatGameDate, datePartsFromGameMinute, gameMinuteFromDateInputs, optionalGameMinuteFromDateInputs, clearDateInputs, setDateInputs } from './game_time.js';
 const embedded = new URLSearchParams(window.location.search).get("embedded") === "1";
 if (embedded) document.body.classList.add("embedded");
 
@@ -19,35 +20,15 @@ function campaignId() {
     return value;
 }
 
-function gameMinuteFromParts() {
-    const day = Number($("event-day").value);
-    const hour = Number($("event-hour").value);
-    const minute = Number($("event-minute-part").value);
-    if (!Number.isInteger(day) || day < 1) throw new Error("Le jour doit être >= 1");
-    if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw new Error("Heure invalide");
-    if (!Number.isInteger(minute) || minute < 0 || minute > 59) throw new Error("Minute invalide");
-    return (day - 1) * 1440 + hour * 60 + minute;
-}
+function gameMinuteFromParts() { return gameMinuteFromDateInputs("event"); }
 
-function partsFromGameMinute(gameMinute) {
-    return {
-        day: Math.floor(gameMinute / 1440) + 1,
-        hour: Math.floor((gameMinute % 1440) / 60),
-        minute: gameMinute % 60,
-    };
-}
+function partsFromGameMinute(gameMinute) { return datePartsFromGameMinute(gameMinute); }
 
-function formatGameMinute(gameMinute) {
-    const {day, hour, minute} = partsFromGameMinute(gameMinute);
-    return `Jour ${day} · ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-}
+function formatGameMinute(gameMinute) { return formatGameDate(gameMinute); }
 
 function refreshComputedMinute() {
-    try {
-        $("computed-game-minute").textContent = String(gameMinuteFromParts());
-    } catch {
-        $("computed-game-minute").textContent = "—";
-    }
+    try { $("computed-game-date").textContent = formatGameDate(gameMinuteFromParts()); }
+    catch { $("computed-game-date").textContent = "—"; }
 }
 
 async function api(url, options = {}) {
@@ -70,14 +51,11 @@ function showToast(message) {
 
 function buildFilterQuery() {
     const params = new URLSearchParams();
-    const mappings = [
-        ["filter-from", "from_game_minute"],
-        ["filter-to", "to_game_minute"],
-        ["filter-event-type", "event_type"],
-        ["filter-target-type", "target_type"],
-        ["filter-target-id", "target_id"],
-    ];
-    for (const [elementId, queryKey] of mappings) {
+    const from = optionalGameMinuteFromDateInputs("filter-from");
+    const to = optionalGameMinuteFromDateInputs("filter-to");
+    if (from != null) params.set("from_game_minute", from);
+    if (to != null) params.set("to_game_minute", to);
+    for (const [elementId, queryKey] of [["filter-event-type","event_type"],["filter-target-type","target_type"],["filter-target-id","target_id"]]) {
         const value = $(elementId).value.trim();
         if (value !== "") params.set(queryKey, value);
     }
@@ -104,14 +82,15 @@ function renderTimeline() {
         return;
     }
 
-    let currentDay = null;
+    let currentDate = null;
     for (const event of events) {
         const parts = partsFromGameMinute(event.game_minute);
-        if (parts.day !== currentDay) {
-            currentDay = parts.day;
+        const dateKey = `${parts.year}-${parts.month}-${parts.day}`;
+        if (dateKey !== currentDate) {
+            currentDate = dateKey;
             const heading = document.createElement("div");
             heading.className = "timeline-day";
-            heading.textContent = `Jour ${currentDay}`;
+            heading.textContent = `A${parts.year} · M${parts.month} · J${parts.day}`;
             timelineEl.appendChild(heading);
         }
 
@@ -150,9 +129,7 @@ function escapeHtml(value) {
 function resetForm() {
     form.reset();
     $("event-id").value = "";
-    $("event-day").value = "1";
-    $("event-hour").value = "0";
-    $("event-minute-part").value = "0";
+    setDateInputs("event", 0);
     $("payload").value = "{}";
     $("delete-event-btn").classList.add("hidden");
     $("dialog-title").textContent = "Nouvel événement";
@@ -169,9 +146,7 @@ function openEditDialog(event) {
     resetForm();
     const parts = partsFromGameMinute(event.game_minute);
     $("event-id").value = event.id;
-    $("event-day").value = parts.day;
-    $("event-hour").value = parts.hour;
-    $("event-minute-part").value = parts.minute;
+    setDateInputs("event", event.game_minute);
     $("event-type").value = event.event_type;
     $("expedition-id").value = event.expedition_id ?? "";
     $("target-type").value = event.target_type ?? "";
@@ -254,7 +229,7 @@ async function deleteCurrentEvent() {
 
 async function inspectWorldState() {
     try {
-        const minute = Number($("inspect-minute").value);
+        const minute = gameMinuteFromDateInputs("inspect-time");
         const state = await api(`/api/campaigns/${campaignId()}/world-state?game_minute=${minute}`);
         $("world-state").textContent = JSON.stringify(state, null, 2);
     } catch (error) {
@@ -262,13 +237,13 @@ async function inspectWorldState() {
     }
 }
 
-for (const id of ["event-day", "event-hour", "event-minute-part"]) {
+for (const id of ["event-year", "event-month", "event-day", "event-hour", "event-minute"]) {
     $(id).addEventListener("input", refreshComputedMinute);
 }
 $("load-btn").addEventListener("click", loadTimeline);
 $("apply-filters-btn").addEventListener("click", loadTimeline);
 $("clear-filters-btn").addEventListener("click", () => {
-    for (const id of ["filter-from", "filter-to", "filter-event-type", "filter-target-type", "filter-target-id"]) $(id).value = "";
+    clearDateInputs("filter-from"); clearDateInputs("filter-to"); for (const id of ["filter-event-type", "filter-target-type", "filter-target-id"]) $(id).value = "";
     loadTimeline();
 });
 $("new-event-btn").addEventListener("click", openCreateDialog);

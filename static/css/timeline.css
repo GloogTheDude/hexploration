@@ -160,3 +160,11 @@ fieldset { border: 1px solid #444; border-radius: 7px; }
 body.embedded > a, body.embedded .topbar { display: none !important; }
 body.embedded .layout { padding: 10px; min-height: 100vh; }
 body.embedded .controls-panel { top: 10px; }
+
+.date-grid-five{grid-template-columns:repeat(5,minmax(58px,1fr))!important}
+.filter-date-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.filter-date-row fieldset{border:1px solid #304151;border-radius:8px;padding:8px}
+.filter-date-row legend{font-size:11px;color:#9fb1c1;padding:0 4px}
+.optional-date input,.inspect-date input{min-width:0;text-align:center}
+.inspect-date{margin-bottom:8px}
+@media(max-width:900px){.filter-date-row{grid-template-columns:1fr}.date-grid-five{grid-template-columns:repeat(5,minmax(48px,1fr))!important}}

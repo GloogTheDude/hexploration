@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hexploration — Dashboard</title>
 <link rel="stylesheet" href="/css/dashboard.css">
-<script type="module" src="/js/dashboard.js"></script>
+<script type="module" src="/js/dashboard.js?v=461"></script>
 </head>
 <body>
 <header class="topbar">
@@ -77,7 +77,13 @@
       <section id="tab-map" class="tab-panel hidden" data-panel="map">
         <div class="panel-toolbar">
           <div><strong>Carte d'expédition</strong><span class="muted">Fog of War basé uniquement sur la connaissance du groupe.</span></div>
-          <a id="map-open" class="button-link" href="/player.html">Ouvrir en plein écran</a>
+          <div class="map-toolbar-actions">
+            <label id="dashboard-ping-color-control" class="dashboard-ping-color-control">
+              <span>Couleur du ping</span>
+              <input id="dashboard-ping-color" type="color" value="#ff4f64" aria-label="Couleur du ping">
+            </label>
+            <a id="map-open" class="button-link" href="/player.html">Ouvrir en plein écran</a>
+          </div>
         </div>
         <iframe id="map-frame" title="Carte de l'expédition" loading="lazy"></iframe>
       </section>

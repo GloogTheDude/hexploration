@@ -43,7 +43,6 @@ from dto.dm_dashboard_dto import (
 )
 from services.errors import ConflictError, ForbiddenOperationError, NotFoundError
 from repositories.expedition_repository import ExpeditionRepository
-from services.movement_modifiers import get_transport_modifier
 from services.visibility_service import VisibilityService
 from services.map_feature_service import MapFeatureService
 
@@ -70,6 +69,13 @@ class DMDashboardService:
         return campaign, membership
 
     def _character_summary(self, character: Character) -> DMCharacterSummary:
+        owner = self.db.get(User, character.owner_user_id)
+        membership = self.db.scalar(
+            select(CampaignMembership).where(
+                CampaignMembership.campaign_id == character.campaign_id,
+                CampaignMembership.user_id == character.owner_user_id,
+            )
+        )
         sheet = self.db.scalar(
             select(CharacterSheetDataVersion)
             .where(
@@ -80,7 +86,11 @@ class DMDashboardService:
         )
         data = dict(sheet.data) if sheet else None
         return DMCharacterSummary(
-            id=character.id, owner_user_id=character.owner_user_id, name=character.name,
+            id=character.id,
+            owner_user_id=character.owner_user_id,
+            owner_username=(owner.username if owner is not None else f"User #{character.owner_user_id}"),
+            owner_role=(membership.role if membership is not None else None),
+            name=character.name,
             race=character.race, character_class=character.character_class, level=character.level,
             status=character.status, current_game_minute=character.current_game_minute,
             current_hp=data.get("current_hp") if data else None,
@@ -273,6 +283,16 @@ class DMDashboardService:
                 raise ForbiddenOperationError(
                     "All expedition characters must belong to the campaign"
                 )
+            membership = self.db.scalar(
+                select(CampaignMembership).where(
+                    CampaignMembership.campaign_id == campaign_id,
+                    CampaignMembership.user_id == character.owner_user_id,
+                )
+            )
+            if membership is None or membership.role != CampaignRole.PLAYER:
+                raise ForbiddenOperationError(
+                    f"Character {character.name} must belong to a registered PLAYER member"
+                )
             if character.status != CharacterStatus.ACTIVE:
                 raise ConflictError(
                     f"Character {character.name} is not active"
@@ -303,17 +323,21 @@ class DMDashboardService:
                 f"Map version v{map_version.version} only becomes effective at minute "
                 f"{map_version.effective_from_game_minute}"
             )
-        target_hex = self.db.scalar(
-            select(MapHex).where(
+        hub_row = self.db.execute(
+            select(PointOfInterest, MapHex)
+            .join(MapHex, PointOfInterest.hex_id == MapHex.id)
+            .where(
                 MapHex.map_version_id == data.map_version_id,
-                MapHex.q == data.q,
-                MapHex.r == data.r,
+                PointOfInterest.is_hub.is_(True),
             )
-        )
-        if target_hex is None:
-            raise NotFoundError("Starting hex not found in this map version")
+            .order_by(PointOfInterest.id)
+        ).first()
+        if hub_row is None:
+            raise ConflictError(
+                "Cette version de carte n'a aucun POI marqué comme hub de départ"
+            )
+        hub, target_hex = hub_row
 
-        transport = get_transport_modifier(data.transport_key)
         expedition = Expedition(
             campaign_id=campaign_id,
             name=name,
@@ -322,10 +346,10 @@ class DMDashboardService:
             current_game_minute=data.start_game_minute,
             return_game_minute=None,
             current_map_version_id=data.map_version_id,
-            current_q=data.q,
-            current_r=data.r,
+            current_q=target_hex.q,
+            current_r=target_hex.r,
             weather_key=None,
-            transport_key=(transport.key if transport is not None else None),
+            transport_key=None,
         )
         self.db.add(expedition)
         self.db.flush()
@@ -387,6 +411,18 @@ class DMDashboardService:
         from services.expedition_service import ExpeditionService
         return ExpeditionService(self.db).return_to_hub(expedition_id)
 
+    def reveal_poi_to_expedition(self, campaign_id: int, expedition_id: int, poi_id: int, user_id: int):
+        self._require_dm(campaign_id, user_id)
+        self._require_campaign_expedition(campaign_id, expedition_id)
+        from services.knowledge_service import KnowledgeService
+        return KnowledgeService(self.db).set_poi_player_visibility(expedition_id, poi_id, visible=True)
+
+    def hide_poi_from_expedition(self, campaign_id: int, expedition_id: int, poi_id: int, user_id: int):
+        self._require_dm(campaign_id, user_id)
+        self._require_campaign_expedition(campaign_id, expedition_id)
+        from services.knowledge_service import KnowledgeService
+        return KnowledgeService(self.db).set_poi_player_visibility(expedition_id, poi_id, visible=False)
+
     def get(self, campaign_id: int, user_id: int) -> DMDashboardResponse:
         campaign, membership = self._require_dm(campaign_id, user_id)
 
@@ -429,6 +465,21 @@ class DMDashboardService:
         )
 
         map_version_ids = [version.id for world_map in maps for version in world_map.versions]
+        hub_by_version: dict[int, tuple[int, str, int, int]] = {}
+        if map_version_ids:
+            for poi, map_hex in self.db.execute(
+                select(PointOfInterest, MapHex)
+                .join(MapHex, PointOfInterest.hex_id == MapHex.id)
+                .where(
+                    MapHex.map_version_id.in_(map_version_ids),
+                    PointOfInterest.is_hub.is_(True),
+                )
+                .order_by(PointOfInterest.id)
+            ).all():
+                hub_by_version.setdefault(
+                    map_hex.map_version_id,
+                    (poi.id, poi.name, map_hex.q, map_hex.r),
+                )
         hex_counts: dict[int, int] = {}
         poi_counts: dict[int, int] = {}
         edge_counts: dict[int, int] = {}
@@ -516,6 +567,9 @@ class DMDashboardService:
                     current_r=expedition.current_r,
                     weather_key=expedition.weather_key,
                     transport_key=expedition.transport_key,
+                    ping_q=expedition.ping_q,
+                    ping_r=expedition.ping_r,
+                    ping_game_minute=expedition.ping_game_minute,
                     participants=[
                         DMExpeditionParticipantSummary(
                             character_id=participant.character_id,
@@ -545,6 +599,10 @@ class DMDashboardService:
                             hex_count=(version.width * version.height if version.default_terrain_key else hex_counts.get(version.id, 0)),
                             poi_count=poi_counts.get(version.id, 0),
                             edge_count=edge_counts.get(version.id, 0),
+                            hub_poi_id=hub_by_version.get(version.id, (None, None, None, None))[0],
+                            hub_name=hub_by_version.get(version.id, (None, None, None, None))[1],
+                            hub_q=hub_by_version.get(version.id, (None, None, None, None))[2],
+                            hub_r=hub_by_version.get(version.id, (None, None, None, None))[3],
                         )
                         for version in sorted(world_map.versions, key=lambda row: row.version, reverse=True)
                     ],
@@ -646,7 +704,7 @@ class DMDashboardService:
             hex_size=version.hex_size,
             default_terrain_key=version.default_terrain_key,
             hexes=[DMMapHexWorkbench(id=h.id, q=h.q, r=h.r, terrain_key=h.terrain_key, elevation=h.elevation, visibility_score=h.visibility_score, travel_cost=h.travel_cost, extra_data=h.extra_data or {}) for h in hexes],
-            pois=[DMPOIWorkbench(id=poi.id, feature_id=poi.feature_id, hex_id=h.id, q=h.q, r=h.r, name=poi.name, kind=poi.kind, dm_description=poi.dm_description, is_landmark=poi.is_landmark) for poi, h in pois],
+            pois=[DMPOIWorkbench(id=poi.id, feature_id=poi.feature_id, hex_id=h.id, q=h.q, r=h.r, name=poi.name, kind=poi.kind, dm_description=poi.dm_description, player_description=poi.player_description, requires_discovery=poi.requires_discovery, is_landmark=poi.is_landmark, is_hub=poi.is_hub) for poi, h in pois],
             edges=[DMEdgeWorkbench(id=e.id, from_q=e.from_q, from_r=e.from_r, to_q=e.to_q, to_r=e.to_r, feature_type=e.feature_type, feature_id=e.feature_id, segment_index=e.segment_index, name=e.name, extra_data=e.extra_data or {}) for e in edges],
             areas=[DMAreaWorkbench(id=a.id, feature_type=a.feature_type, feature_id=a.feature_id, name=a.name, cells=list(a.cells or []), extra_data=a.extra_data or {}) for a in areas],
         )
@@ -671,7 +729,7 @@ class DMDashboardService:
         return {
             "map_version_id": version.id,
             "features": [{"feature_type": f.feature_type, "feature_id": f.feature_id, "downstream_feature_type": f.downstream_feature_type, "downstream_feature_id": f.downstream_feature_id} for f in features],
-            "pois": [{"feature_id": poi.feature_id, "q": h.q, "r": h.r, "name": poi.name, "kind": poi.kind, "dm_description": poi.dm_description, "is_landmark": poi.is_landmark} for poi, h in poi_rows],
+            "pois": [{"feature_id": poi.feature_id, "q": h.q, "r": h.r, "name": poi.name, "kind": poi.kind, "dm_description": poi.dm_description, "player_description": poi.player_description, "requires_discovery": poi.requires_discovery, "is_landmark": poi.is_landmark, "is_hub": poi.is_hub} for poi, h in poi_rows],
             "edges": [{"from_q": e.from_q, "from_r": e.from_r, "to_q": e.to_q, "to_r": e.to_r, "feature_type": e.feature_type, "feature_id": e.feature_id, "segment_index": e.segment_index, "name": e.name, "extra_data": dict(e.extra_data or {})} for e in edges],
             "areas": [{"feature_type": a.feature_type, "feature_id": a.feature_id, "name": a.name, "cells": list(a.cells or []), "extra_data": dict(a.extra_data or {})} for a in areas],
             "events": [{"expedition_id": e.expedition_id, "game_minute": e.game_minute, "event_type": e.event_type, "target_type": e.target_type, "target_id": e.target_id, "payload": dict(e.payload or {}), "dm_note": e.dm_note} for e in events],
@@ -721,7 +779,7 @@ class DMDashboardService:
         for item in data.pois:
             feature_service.ensure(campaign_id=campaign_id, map_id=world_map.id, feature_type="POI", feature_id=int(item["feature_id"]))
             h = self._ensure_map_hex(version, int(item["q"]), int(item["r"]))
-            self.db.add(PointOfInterest(feature_id=int(item["feature_id"]), hex_id=h.id, name=item["name"], kind=item.get("kind"), dm_description=item.get("dm_description"), is_landmark=bool(item.get("is_landmark", False))))
+            self.db.add(PointOfInterest(feature_id=int(item["feature_id"]), hex_id=h.id, name=item["name"], kind=item.get("kind"), dm_description=item.get("dm_description"), player_description=item.get("player_description"), requires_discovery=bool(item.get("requires_discovery", False)), is_landmark=bool(item.get("is_landmark", False)), is_hub=bool(item.get("is_hub", False))))
         for item in data.edges:
             feature_service.ensure(campaign_id=campaign_id, map_id=world_map.id, feature_type=item["feature_type"], feature_id=int(item["feature_id"]))
             self._ensure_map_hex(version, int(item["from_q"]), int(item["from_r"]))
@@ -894,10 +952,24 @@ class DMDashboardService:
             name=data.name.strip(),
             kind=data.kind.strip().upper() if data.kind and data.kind.strip() else None,
             dm_description=data.dm_description,
+            player_description=data.player_description,
+            requires_discovery=data.requires_discovery,
             is_landmark=data.is_landmark,
+            is_hub=data.is_hub,
         )
         self.db.add(poi)
         self.db.flush()
+        if poi.is_hub:
+            for other in self.db.scalars(
+                select(PointOfInterest)
+                .join(MapHex, PointOfInterest.hex_id == MapHex.id)
+                .where(
+                    MapHex.map_version_id == map_version_id,
+                    PointOfInterest.id != poi.id,
+                    PointOfInterest.is_hub.is_(True),
+                )
+            ):
+                other.is_hub = False
         # Every newly-authored POI gets an explicit temporal birth.  The stable
         # feature_id is the WorldEvent target, so moving/editing the concrete
         # POI later does not break its history.
@@ -941,8 +1013,26 @@ class DMDashboardService:
             poi.kind = raw.strip().upper() if raw and raw.strip() else None
         if "dm_description" in changes:
             poi.dm_description = changes["dm_description"]
+        if "player_description" in changes:
+            poi.player_description = changes["player_description"]
+        if "requires_discovery" in changes:
+            poi.requires_discovery = bool(changes["requires_discovery"])
         if "is_landmark" in changes and changes["is_landmark"] is not None:
             poi.is_landmark = changes["is_landmark"]
+        if "is_hub" in changes and changes["is_hub"] is not None:
+            poi.is_hub = changes["is_hub"]
+            if poi.is_hub:
+                map_version_id = self.db.scalar(select(MapHex.map_version_id).where(MapHex.id == poi.hex_id))
+                for other in self.db.scalars(
+                    select(PointOfInterest)
+                    .join(MapHex, PointOfInterest.hex_id == MapHex.id)
+                    .where(
+                        MapHex.map_version_id == map_version_id,
+                        PointOfInterest.id != poi.id,
+                        PointOfInterest.is_hub.is_(True),
+                    )
+                ):
+                    other.is_hub = False
         self.db.commit()
         self.db.refresh(poi)
         return poi
@@ -1741,6 +1831,7 @@ class DMDashboardService:
             WorldEventCreate(
                 game_minute=data.game_minute,
                 event_type=data.event_type,
+                expedition_id=data.expedition_id,
                 target_type="POI",
                 target_id=poi.feature_id,
                 payload=data.payload,

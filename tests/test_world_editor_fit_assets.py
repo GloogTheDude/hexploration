@@ -11,4 +11,4 @@ def test_world_editor_defers_initial_fit_until_canvas_has_real_size():
     assert "initialFitPending=true" in js
     assert "requestAnimationFrame(()=>fitView())" in js
     assert "if(initialFitPending)fitView();else draw()" in js
-    assert "/js/world.js?v=444" in html
+    assert "/js/world.js?v=460" in html

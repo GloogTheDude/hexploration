@@ -55,3 +55,12 @@ class MovementResponse(BaseModel):
     base_duration_minutes: int
     effective_duration_minutes: int
     modifiers: list
+
+
+class MovementUndoResponse(BaseModel):
+    movement: MovementResponse
+    expedition_id: int
+    current_q: int
+    current_r: int
+    current_game_minute: int
+

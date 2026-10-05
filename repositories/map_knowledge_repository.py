@@ -41,6 +41,22 @@ class MapKnowledgeRepository:
         )
         return list(self.db.scalars(stmt))
 
+
+    def participants_at(
+        self,
+        expedition_id: int,
+        game_minute: int,
+    ) -> list[ExpeditionCharacter]:
+        stmt = select(ExpeditionCharacter).where(
+            ExpeditionCharacter.expedition_id == expedition_id,
+            ExpeditionCharacter.joined_game_minute <= game_minute,
+            (
+                ExpeditionCharacter.left_game_minute.is_(None)
+                | (ExpeditionCharacter.left_game_minute >= game_minute)
+            ),
+        )
+        return list(self.db.scalars(stmt))
+
     def add(self, observation: CharacterMapHexObservation) -> CharacterMapHexObservation:
         self.db.add(observation)
         self.db.flush()

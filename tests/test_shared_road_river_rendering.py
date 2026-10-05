@@ -19,4 +19,4 @@ def test_export_skips_junction_fill_on_shared_road_river_nodes():
 
 def test_world_editor_cache_bust_for_shared_corridor_fix():
     html = Path("static/world.html").read_text(encoding="utf-8")
-    assert '/js/world.js?v=444' in html
+    assert '/js/world.js?v=460' in html

@@ -6,6 +6,8 @@ class POICreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     kind: str | None = Field(default=None, max_length=80)
     dm_description: str | None = None
+    player_description: str | None = None
+    requires_discovery: bool = False
     is_landmark: bool = False
 
 class POIResponse(BaseModel):
@@ -16,7 +18,10 @@ class POIResponse(BaseModel):
     name: str
     kind: str | None
     dm_description: str | None
+    player_description: str | None = None
+    requires_discovery: bool = False
     is_landmark: bool
+    is_hub: bool = False
 
 class POITemporalStateResponse(BaseModel):
     poi: POIResponse

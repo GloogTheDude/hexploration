@@ -219,7 +219,7 @@ class MapKnowledgeService:
             raise ForbiddenOperationError("Expedition and map must belong to the same campaign")
 
         minute = expedition.current_game_minute if as_of_game_minute is None else as_of_game_minute
-        participants = self.repo.active_participants(expedition_id, minute)
+        participants = self.repo.participants_at(expedition_id, minute)
         merged: dict[tuple[int, int], CharacterMapHexObservation] = {}
         for participant in participants:
             rows = self.character_map(

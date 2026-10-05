@@ -19,25 +19,34 @@ from db.models import (
     WorldMap,
 )
 
+from tests.database_config import validated_test_database_url
+
+
+def _make_test_engine():
+    database_url = validated_test_database_url()
+    if database_url is None:
+        engine = create_engine(
+            "sqlite+pysqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+    else:
+        engine = create_engine(database_url)
+
+    if engine.dialect.name == "sqlite":
+        @event.listens_for(engine, "connect")
+        def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
+    return engine
+
 
 @pytest.fixture()
 def db() -> Session:
-    """Fresh isolated SQLAlchemy database for every pytest test.
-
-    This intentionally does not use the developer PostgreSQL database. Service
-    tests therefore remain deterministic and can be run with plain ``pytest``.
-    """
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-
-    @event.listens_for(engine, "connect")
-    def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+    """Fresh isolated SQLAlchemy database for every pytest test."""
+    engine = _make_test_engine()
 
     Base.metadata.create_all(engine)
     TestingSession = sessionmaker(

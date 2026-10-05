@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hexploration — Éditeur de carte</title>
   <link rel="stylesheet" href="/css/style.css?v=320">
-  <script type="module" src="/js/app.js?v=320"></script>
+  <script type="module" src="/js/app.js?v=460"></script>
 </head>
 <body>
   <header class="editor-header">
@@ -43,10 +43,16 @@
       <span>Nom de version</span>
       <input id="persist-version-name" value="Initial version" maxlength="160">
     </label>
-    <label class="field compact-field">
-      <span>Effective à m.</span>
-      <input id="persist-effective-minute" type="number" min="0" value="0">
-    </label>
+    <div class="field persist-date-field">
+      <span>Effective à</span>
+      <div class="persist-date-grid">
+        <label>A<input id="persist-time-year" type="number" min="0" value="0"></label>
+        <label>M<input id="persist-time-month" type="number" min="1" max="12" value="1"></label>
+        <label>J<input id="persist-time-day" type="number" min="1" max="30" value="1"></label>
+        <label>H<input id="persist-time-hour" type="number" min="0" max="23" value="0"></label>
+        <label>Min<input id="persist-time-minute" type="number" min="0" max="59" value="0"></label>
+      </div>
+    </div>
 
     <div id="save-mode-wrap" class="save-mode hidden" aria-label="Mode de sauvegarde">
       <label><input type="radio" name="save-mode" value="update" checked> Mettre à jour v<span id="update-version-number">1</span></label>

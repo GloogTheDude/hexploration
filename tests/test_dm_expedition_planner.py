@@ -7,6 +7,7 @@ from db.models import (
     CharacterStatus,
     ExpeditionCharacter,
     ExpeditionStatus,
+    PointOfInterest,
     User,
 )
 from dto.dm_dashboard_dto import DMExpeditionPlanCreate
@@ -47,9 +48,11 @@ def test_dm_planner_creates_ready_active_expedition_atomically(db: Session, camp
     dm = make_user(db, "dm")
     owner = make_user(db, "owner")
     db.add(CampaignMembership(campaign_id=campaign.id, user_id=dm.id, role=CampaignRole.DM))
+    db.add(CampaignMembership(campaign_id=campaign.id, user_id=owner.id, role=CampaignRole.PLAYER))
     _, version, _, destination = make_map_with_two_hexes(db, campaign)
     alice = make_character(db, campaign, owner, name="Alice", minute=80)
     bob = make_character(db, campaign, owner, name="Bob", minute=75)
+    db.add(PointOfInterest(feature_id=1, hex_id=destination.id, name="North Gate", kind="TOWN", dm_description=None, is_landmark=True, is_hub=True))
     db.commit()
 
     result = DMDashboardService(db).create_expedition_plan(
@@ -60,15 +63,12 @@ def test_dm_planner_creates_ready_active_expedition_atomically(db: Session, camp
             start_game_minute=90,
             character_ids=[alice.id, bob.id],
             map_version_id=version.id,
-            q=destination.q,
-            r=destination.r,
-            transport_key="horse",
             start_now=True,
         ),
     )
 
     assert result.status == ExpeditionStatus.ACTIVE
-    assert result.transport_key == "HORSE"
+    assert result.transport_key is None
     assert result.participant_ids == [alice.id, bob.id]
     expedition = db.get(__import__('db.models', fromlist=['Expedition']).Expedition, result.expedition_id)
     assert expedition.name == "Northern Watch"
@@ -83,6 +83,7 @@ def test_dm_planner_refuses_temporal_backtracking_without_partial_expedition(db:
     dm = make_user(db, "dm_backtrack")
     owner = make_user(db, "owner_backtrack")
     db.add(CampaignMembership(campaign_id=campaign.id, user_id=dm.id, role=CampaignRole.DM))
+    db.add(CampaignMembership(campaign_id=campaign.id, user_id=owner.id, role=CampaignRole.PLAYER))
     _, version, source, _ = make_map_with_two_hexes(db, campaign)
     traveler = make_character(db, campaign, owner, name="Future Scout", minute=120)
     db.commit()
@@ -116,6 +117,7 @@ def test_dm_planner_rejects_non_dm(db: Session, campaign):
     player = make_user(db, "player")
     owner = make_user(db, "owner_player")
     db.add(CampaignMembership(campaign_id=campaign.id, user_id=player.id, role=CampaignRole.PLAYER))
+    db.add(CampaignMembership(campaign_id=campaign.id, user_id=owner.id, role=CampaignRole.PLAYER))
     _, version, source, _ = make_map_with_two_hexes(db, campaign)
     character = make_character(db, campaign, owner, name="Scout")
     db.commit()
@@ -145,6 +147,7 @@ def test_dm_planner_cannot_use_future_map_version(db: Session, campaign):
     dm = make_user(db, "dm_future_map")
     owner = make_user(db, "owner_future_map")
     db.add(CampaignMembership(campaign_id=campaign.id, user_id=dm.id, role=CampaignRole.DM))
+    db.add(CampaignMembership(campaign_id=campaign.id, user_id=owner.id, role=CampaignRole.PLAYER))
     _, version, source, _ = make_map_with_two_hexes(db, campaign)
     version.effective_from_game_minute = 200
     character = make_character(db, campaign, owner, name="Early Scout", minute=50)
@@ -169,3 +172,59 @@ def test_dm_planner_cannot_use_future_map_version(db: Session, campaign):
         assert "only becomes effective at minute 200" in str(exc)
     else:
         raise AssertionError("Expected future map version to be rejected")
+
+
+def test_dm_planner_rejects_character_whose_owner_is_not_registered_player(db: Session, campaign):
+    dm = make_user(db, "dm_unregistered")
+    outsider = make_user(db, "outsider")
+    db.add(CampaignMembership(campaign_id=campaign.id, user_id=dm.id, role=CampaignRole.DM))
+    _, version, source, _ = make_map_with_two_hexes(db, campaign)
+    character = make_character(db, campaign, outsider, name="Outsider Scout")
+    db.commit()
+
+    try:
+        DMDashboardService(db).create_expedition_plan(
+            campaign.id,
+            dm.id,
+            DMExpeditionPlanCreate(
+                name="Invalid party",
+                start_game_minute=0,
+                character_ids=[character.id],
+                map_version_id=version.id,
+                q=source.q,
+                r=source.r,
+                transport_key="FOOT",
+                start_now=False,
+            ),
+        )
+    except ForbiddenOperationError as exc:
+        assert "registered PLAYER member" in str(exc)
+    else:
+        raise AssertionError("Expected unregistered character owner to be rejected")
+
+
+def test_dm_planner_requires_a_hub_on_selected_map_version(db: Session, campaign):
+    dm = make_user(db, "dm_no_hub")
+    owner = make_user(db, "owner_no_hub")
+    db.add(CampaignMembership(campaign_id=campaign.id, user_id=dm.id, role=CampaignRole.DM))
+    db.add(CampaignMembership(campaign_id=campaign.id, user_id=owner.id, role=CampaignRole.PLAYER))
+    _, version, _, _ = make_map_with_two_hexes(db, campaign)
+    traveler = make_character(db, campaign, owner, name="Traveler", minute=0)
+    db.commit()
+
+    try:
+        DMDashboardService(db).create_expedition_plan(
+            campaign.id,
+            dm.id,
+            DMExpeditionPlanCreate(
+                name="No hub",
+                start_game_minute=0,
+                character_ids=[traveler.id],
+                map_version_id=version.id,
+                start_now=True,
+            ),
+        )
+    except ConflictError as exc:
+        assert "hub" in str(exc).lower()
+    else:
+        raise AssertionError("Expected expedition creation to require a hub")

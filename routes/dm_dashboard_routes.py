@@ -192,6 +192,55 @@ def return_dm_expedition(
         _raise_http(exc)
 
 
+@router.post(
+    "/api/campaigns/{campaign_id}/dm-expeditions/{expedition_id}/pois/{poi_id}/reveal",
+    status_code=201,
+)
+def reveal_dm_poi(
+    campaign_id: int,
+    expedition_id: int,
+    poi_id: int,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        observations = DMDashboardService(db).reveal_poi_to_expedition(
+            campaign_id, expedition_id, poi_id, user_id
+        )
+        return {
+            "expedition_id": expedition_id,
+            "poi_id": poi_id,
+            "observed_game_minute": observations[0].observed_game_minute if observations else None,
+            "character_ids": [row.character_id for row in observations],
+        }
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError) as exc:
+        _raise_http(exc)
+
+
+@router.post(
+    "/api/campaigns/{campaign_id}/dm-expeditions/{expedition_id}/pois/{poi_id}/hide",
+    status_code=201,
+)
+def hide_dm_poi(
+    campaign_id: int,
+    expedition_id: int,
+    poi_id: int,
+    user_id: int = Query(gt=0),
+    db: Session = Depends(get_db),
+):
+    try:
+        observations = DMDashboardService(db).hide_poi_from_expedition(
+            campaign_id, expedition_id, poi_id, user_id
+        )
+        return {
+            "expedition_id": expedition_id,
+            "poi_id": poi_id,
+            "observed_game_minute": observations[0].observed_game_minute if observations else None,
+            "character_ids": [row.character_id for row in observations],
+            "hidden": True,
+        }
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError) as exc:
+        _raise_http(exc)
 
 
 @router.post(

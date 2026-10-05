@@ -62,11 +62,28 @@ class KnowledgeService:
         expedition_id: int,
         poi_id: int,
     ) -> list[CharacterKnowledgeObservation]:
+        return self.set_poi_player_visibility(expedition_id, poi_id, visible=True)
+
+    def set_poi_player_visibility(
+        self,
+        expedition_id: int,
+        poi_id: int,
+        *,
+        visible: bool,
+    ) -> list[CharacterKnowledgeObservation]:
+        """Explicit DM control over whether the party currently knows a POI.
+
+        This is deliberately separate from ``POI_VISIBILITY_CHANGED``.  The
+        latter is world truth (for example whether a tower can be seen from far
+        away); this method records what the expedition's characters are allowed
+        to have on their player map.  A same-minute toggle updates the exact
+        observation instead of violating the observation uniqueness constraint.
+        """
         expedition = self.expeditions.get(expedition_id)
         if expedition is None:
             raise NotFoundError("Expedition not found")
         if expedition.status != ExpeditionStatus.ACTIVE:
-            raise ConflictError("Only an active expedition can discover a POI")
+            raise ConflictError("Only an active expedition can change POI knowledge")
         if (
             expedition.current_map_version_id is None
             or expedition.current_q is None
@@ -76,15 +93,12 @@ class KnowledgeService:
 
         poi = self.pois.get(poi_id)
         poi_campaign_id, map_version_id, q, r = self._poi_campaign_and_position(poi)
-
         if poi_campaign_id != expedition.campaign_id:
-            raise ForbiddenOperationError(
-                "POI and expedition must belong to the same campaign"
-            )
+            raise ForbiddenOperationError("POI and expedition must belong to the same campaign")
         if map_version_id != expedition.current_map_version_id:
             raise ConflictError("POI is not on the expedition's current map version")
-        if (q, r) != (expedition.current_q, expedition.current_r):
-            raise ConflictError("POI can only be discovered from its current hex")
+        if visible and (q, r) != (expedition.current_q, expedition.current_r):
+            raise ConflictError("POI can only be revealed from its current hex")
 
         participants = [
             participant
@@ -103,14 +117,14 @@ class KnowledgeService:
         snapshot = {
             "name": poi.name,
             "kind": poi.kind,
+            "description": poi.player_description,
             "map_version_id": map_version_id,
             "q": q,
             "r": r,
             "state": state.state,
             "exists": state.exists,
-            "world_event_id": (
-                state.latest_event.id if state.latest_event is not None else None
-            ),
+            "world_event_id": state.latest_event.id if state.latest_event is not None else None,
+            "hidden_from_players": not visible,
         }
 
         observations: list[CharacterKnowledgeObservation] = []
@@ -123,6 +137,8 @@ class KnowledgeService:
                 observed_game_minute=expedition.current_game_minute,
             )
             if existing is not None:
+                existing.knowledge = dict(snapshot)
+                existing.source_type = "DISCOVERY" if visible else "DM_HIDDEN"
                 observations.append(existing)
                 continue
 
@@ -132,7 +148,7 @@ class KnowledgeService:
                 target_type="POI",
                 target_id=poi.feature_id,
                 observed_game_minute=expedition.current_game_minute,
-                source_type="DISCOVERY",
+                source_type="DISCOVERY" if visible else "DM_HIDDEN",
                 knowledge=dict(snapshot),
             )
             self.repo.add(observation)

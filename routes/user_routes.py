@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from db.session import get_db
-from dto.user_dto import UserCreate, UserResponse
+from dto.user_dto import UserCreate, UserPingColorUpdate, UserResponse
 from services.errors import ConflictError, NotFoundError
 from services.user_service import UserService
 
@@ -28,5 +28,13 @@ def get_user(
 ) -> UserResponse:
     try:
         return UserResponse.model_validate(UserService(db).get(user_id))
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.put("/{user_id}/ping-color", response_model=UserResponse)
+def update_ping_color(user_id: int, data: UserPingColorUpdate, db: Session = Depends(get_db)) -> UserResponse:
+    try:
+        return UserResponse.model_validate(UserService(db).update_ping_color(user_id, data.ping_color))
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

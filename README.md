@@ -877,3 +877,33 @@ it. Migration: `0012_river_networks`.
 - Inspector no longer horizontally overflows on event date forms.
 - POI WorldEvent editing now has explicit progress/error feedback and deterministic timeline refresh after PATCH.
 - Cache bust updated to 451.
+
+
+## Flow 4 — expedition creation from a map hub
+
+The DM expedition planner now separates **map** and **map version** selection. A POI can be marked as the unique **hub of departure** for a map version from the World Editor. Expeditions always start from that hub; manual Q/R entry and transport selection were removed from creation. Transport remains expedition state that can be changed later by the movement/modifier systems.
+
+Campaign absolute time is still stored canonically as integer `game_minute` in the API/database, but the main user interfaces now display/edit it using the fixed campaign calendar **Year / Month / Day / Hour / Minute** (12 months/year, 30 days/month, 24 hours/day).
+
+Migration: `0013_poi_hubs`.
+
+## Flow 4 session-map pass
+
+The expedition loop now separates the canonical DM session map from the player fog-of-war map.
+
+- DM expedition details open `/dm_expedition.html` for canonical terrain/features, player-knowledge overlay, destination pings, movement, POI reveal and POI WorldEvents at the expedition clock.
+- `/player.html` never moves the party. Players can only inspect known POIs and ping an adjacent next hex; movement remains a DM action.
+- Player hexes expose `VISIBLE` (current field of view) versus `SEEN` (remembered snapshot). POI/world changes outside current visibility do not overwrite remembered knowledge.
+- POIs can be marked `requires_discovery`; those never auto-discover simply because the party stands on their hex and must first be revealed by the DM.
+- POIs now have a separate player-facing description captured in knowledge snapshots.
+- Sparse default terrain is materialized only around the active visibility neighbourhood, fixing implicit SEA/default-terrain gaps without densifying the whole map.
+- Migration `0014_expedition_ping_player_poi` adds expedition ping state plus player POI description/search-required metadata.
+
+## Flow 4 session map refinements (v0.51.5)
+
+- Player destination pings are now a single-click interaction on an adjacent hex.
+- Each user has a persistent `ping_color`; the map exposes a native color picker and stores the choice in the database.
+- A ping is intentionally ephemeral in wall-clock time (a few seconds) and blinks on both the player and DM session maps. It remains an intention only; movement is still performed by the DM.
+- Finished expeditions are rendered as read-only historical snapshots. Their map knowledge is resolved from the characters who were present at the expedition end minute, including participants whose `left_game_minute` equals the return minute.
+- `Cacher aux joueurs` is authoritative: automatic visibility no longer re-discovers a POI after the DM has explicitly hidden it. A new explicit reveal is required.
+- Migration `0015_ping_identity_color` adds persistent user ping colour plus ping author/timestamp metadata.

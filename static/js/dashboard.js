@@ -1,3 +1,4 @@
+import { formatGameDate } from './game_time.js';
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -5,7 +6,7 @@ const ui = {
   userId: $("#user-id"), loadBtn: $("#load-user"), userInfo: $("#user-info"), error: $("#error"),
   campaigns: $("#campaigns"), invitations: $("#invitations"), invitationMessage: $("#invitation-message"), refreshInvitations: $("#refresh-invitations"), characters: $("#characters"), toggleCharacterCreate: $("#toggle-character-create"), characterModal: $("#character-modal"), closeCharacterModal: $("#close-character-modal"), cancelCharacterCreate: $("#cancel-character-create"), characterCreateForm: $("#character-create-form"), characterCreateName: $("#character-create-name"), characterCreateRace: $("#character-create-race"), characterCreateClass: $("#character-create-class"), characterCreateLevel: $("#character-create-level"), characterCreateDescription: $("#character-create-description"), characterCreateMessage: $("#character-create-message"), expeditions: $("#expeditions"), campaignLabel: $("#campaign-label"),
   contextTitle: $("#context-title"), contextMeta: $("#context-meta"), contextActions: $("#context-actions"), emptyWorkspace: $("#empty-workspace"),
-  mapFrame: $("#map-frame"), mapOpen: $("#map-open"), wikiTitle: $("#wiki-title"), wikiSubtitle: $("#wiki-subtitle"), wikiList: $("#wiki-list"), wikiReader: $("#wiki-reader"), wikiRefresh: $("#wiki-refresh"),
+  mapFrame: $("#map-frame"), mapOpen: $("#map-open"), dashboardPingColorControl: $("#dashboard-ping-color-control"), dashboardPingColor: $("#dashboard-ping-color"), wikiTitle: $("#wiki-title"), wikiSubtitle: $("#wiki-subtitle"), wikiList: $("#wiki-list"), wikiReader: $("#wiki-reader"), wikiRefresh: $("#wiki-refresh"),
   recallBadge: $("#recall-badge"), recallStatusLine: $("#recall-status-line"), recallDisabled: $("#recall-disabled"), recallActive: $("#recall-active"),
   recallForm: $("#recall-search-form"), recallQuery: $("#recall-query"), recallMessage: $("#recall-message"), recallResults: $("#recall-results"), recallLibrary: $("#recall-library"), recallReader: $("#recall-reader"), recallRefresh: $("#recall-refresh"),
   sheetModal: $("#sheet-modal"), closeSheetModal: $("#close-sheet-modal"), sheetTitle: $("#sheet-modal-title"), sheetCurrentLabel: $("#sheet-current-label"), sheetCurrentMeta: $("#sheet-current-meta"), sheetMessage: $("#sheet-message"), sheetDataForm: $("#sheet-data-form"), sheetExportPdf: $("#sheet-export-pdf"), sheetSave: $("#sheet-save"), sheetHistory: $("#sheet-history"),
@@ -31,6 +32,26 @@ function statusClass(status) { return status === "ACTIVE" ? "status-active" : st
 function humanPosition(e) { return e.current_q == null ? "sans position" : `(${e.current_q}, ${e.current_r})`; }
 function qs(name, value) { const url = new URL(location.href); if (value == null) url.searchParams.delete(name); else url.searchParams.set(name, value); history.replaceState(null, "", url); }
 
+function syncPingColorToMap(color) {
+  try {
+    const input = ui.mapFrame?.contentDocument?.querySelector("#ping-color");
+    if (input) input.value = color;
+  } catch (_) {}
+}
+
+async function saveDashboardPingColor() {
+  if (!state.user || !ui.dashboardPingColor) return;
+  try {
+    const user = await api(`/api/users/${state.user.id}/ping-color`, {
+      method: "PUT",
+      body: JSON.stringify({ ping_color: ui.dashboardPingColor.value }),
+    });
+    state.user.ping_color = user.ping_color;
+    ui.dashboardPingColor.value = user.ping_color;
+    syncPingColorToMap(user.ping_color);
+  } catch (e) { ui.error.textContent = e.message; }
+}
+
 function renderInvitations() {
   ui.invitations.classList.remove("muted");
   ui.invitations.innerHTML = state.invitations.map(i => `<div class="item"><strong>${esc(i.campaign_name)}</strong><div class="meta"><span>Invité par ${esc(i.invited_by_username)}</span></div><div class="actions"><button data-invite-accept="${i.id}">Accepter</button><button data-invite-refuse="${i.id}">Refuser</button></div></div>`).join("") || '<div class="empty">Aucune invitation en attente.</div>';
@@ -54,7 +75,7 @@ function renderCharacters() {
   const rows = state.characters.filter(c => c.campaign_id === state.campaign?.id);
   ui.characters.classList.remove("muted");
   ui.toggleCharacterCreate.classList.toggle("hidden", !state.campaign);
-  ui.characters.innerHTML = rows.map(c => `<div class="item character-item ${state.character?.id === c.id ? "selected" : ""}"><button class="character-select" data-character="${c.id}" type="button"><strong>${esc(c.name)}</strong><div class="meta"><span>#${c.id}</span><span>${esc(c.race || "—")}</span><span>${esc(c.character_class || "—")}</span><span>niv. ${c.level ?? "—"}</span><span>${esc(c.status)}</span><span>m.${c.current_game_minute}</span></div></button><div class="character-actions"><button type="button" data-character-sheet="${c.id}">Fiche</button><button type="button" class="secondary" data-character-retire="${c.id}" ${c.status !== 'ACTIVE' ? 'disabled' : ''}>Retirer</button><button type="button" class="danger" data-character-delete="${c.id}">Supprimer</button></div></div>`).join("") || '<div class="empty">Aucun personnage dans cette campagne.</div>';
+  ui.characters.innerHTML = rows.map(c => `<div class="item character-item ${state.character?.id === c.id ? "selected" : ""}"><button class="character-select" data-character="${c.id}" type="button"><strong>${esc(c.name)}</strong><div class="meta"><span>#${c.id}</span><span>${esc(c.race || "—")}</span><span>${esc(c.character_class || "—")}</span><span>niv. ${c.level ?? "—"}</span><span>${esc(c.status)}</span><span>${formatGameDate(c.current_game_minute)}</span></div></button><div class="character-actions"><button type="button" data-character-sheet="${c.id}">Fiche</button><button type="button" class="secondary" data-character-retire="${c.id}" ${c.status !== 'ACTIVE' ? 'disabled' : ''}>Retirer</button><button type="button" class="danger" data-character-delete="${c.id}">Supprimer</button></div></div>`).join("") || '<div class="empty">Aucun personnage dans cette campagne.</div>';
   $$('[data-character]').forEach(el => el.addEventListener("click", () => selectCharacter(Number(el.dataset.character))));
   $$('[data-character-delete]').forEach(el => el.addEventListener('click', () => deleteCharacter(Number(el.dataset.characterDelete))));
   $$('[data-character-retire]').forEach(el => el.addEventListener('click', () => retireCharacter(Number(el.dataset.characterRetire))));
@@ -65,7 +86,7 @@ function renderExpeditions() {
   ui.expeditions.classList.remove("muted");
   if (!state.character) { ui.expeditions.innerHTML = '<div class="empty">Sélectionne un personnage.</div>'; return; }
   ui.campaignLabel.textContent = `${state.campaign.name} · ${state.character.name}`;
-  ui.expeditions.innerHTML = state.expeditions.map(e => `<div class="item clickable ${state.expedition?.id === e.id ? "selected" : ""}" data-expedition="${e.id}"><strong>${esc(e.name)}</strong><div class="meta"><span>#${e.id}</span><span class="${statusClass(e.status)}">${esc(e.status)}</span><span>m.${e.current_game_minute}</span><span>${humanPosition(e)}</span></div></div>`).join("") || '<div class="empty">Aucune expédition pour ce personnage.</div>';
+  ui.expeditions.innerHTML = state.expeditions.map(e => `<div class="item clickable ${state.expedition?.id === e.id ? "selected" : ""}" data-expedition="${e.id}"><strong>${esc(e.name)}</strong><div class="meta"><span>#${e.id}</span><span class="${statusClass(e.status)}">${esc(e.status)}</span><span>${formatGameDate(e.current_game_minute)}</span><span>${humanPosition(e)}</span></div></div>`).join("") || '<div class="empty">Aucune expédition pour ce personnage.</div>';
   $$('[data-expedition]').forEach(el => el.addEventListener("click", () => selectExpedition(Number(el.dataset.expedition))));
 }
 
@@ -90,10 +111,10 @@ function renderContext() {
     return;
   }
   ui.contextTitle.textContent = e.name;
-  ui.contextMeta.innerHTML = `<span class="${statusClass(e.status)}">${esc(e.status)}</span><span>minute ${e.current_game_minute}</span><span>position ${humanPosition(e)}</span><span>${esc(state.character.name)}</span>`;
-  ui.contextActions.innerHTML = `<a class="button-link" href="/player.html?expedition=${e.id}">Carte plein écran</a>`;
-  const mapUrl = `/player.html?expedition=${e.id}&embedded=1`;
-  ui.mapOpen.href = `/player.html?expedition=${e.id}`;
+  ui.contextMeta.innerHTML = `<span class="${statusClass(e.status)}">${esc(e.status)}</span><span>${formatGameDate(e.current_game_minute)}</span><span>position ${humanPosition(e)}</span><span>${esc(state.character.name)}</span>`;
+  ui.contextActions.innerHTML = `<a class="button-link" href="/player.html?expedition=${e.id}&user=${state.user.id}">Carte plein écran</a>`;
+  const mapUrl = `/player.html?expedition=${e.id}&embedded=1&user=${state.user.id}`;
+  ui.mapOpen.href = `/player.html?expedition=${e.id}&user=${state.user.id}`;
   if (ui.mapFrame.getAttribute("src") !== mapUrl) ui.mapFrame.src = mapUrl;
   setTab(state.tab);
 }
@@ -145,7 +166,7 @@ async function selectExpedition(id) {
 
 function renderWikiPage(container, pageState, label = "") {
   const p = pageState.page, r = pageState.revision;
-  container.innerHTML = `<h3>${esc(p.title)}</h3><div class="reader-meta">${esc(p.category || "Wiki")} · révision ${r.revision} · effective minute ${r.effective_from_game_minute}${label ? ` · ${esc(label)}` : ""}</div>${esc(r.content)}`;
+  container.innerHTML = `<h3>${esc(p.title)}</h3><div class="reader-meta">${esc(p.category || "Wiki")} · révision ${r.revision} · ${formatGameDate(r.effective_from_game_minute)}${label ? ` · ${esc(label)}` : ""}</div>${esc(r.content)}`;
 }
 
 async function loadWiki() {
@@ -158,7 +179,7 @@ async function loadWiki() {
       ui.wikiSubtitle.textContent = "Seules les pages déjà rappelées sont accessibles hors du hub.";
       const library = await api(`/api/expeditions/${state.expedition.id}/recall`);
       const pages = library.pages || [];
-      ui.wikiList.innerHTML = pages.map((entry, i) => `<div class="knowledge-item" data-wiki-index="${i}"><div class="title">${esc(entry.page.title)}</div><div class="small">rappelée m.${entry.recall.recalled_at_game_minute} · cutoff m.${entry.recall.knowledge_cutoff_game_minute}</div></div>`).join("") || '<div class="empty">Aucune page rappelée. Utilise l’onglet Recall.</div>';
+      ui.wikiList.innerHTML = pages.map((entry, i) => `<div class="knowledge-item" data-wiki-index="${i}"><div class="title">${esc(entry.page.title)}</div><div class="small">rappelée ${formatGameDate(entry.recall.recalled_at_game_minute)} · connaissances figées ${formatGameDate(entry.recall.knowledge_cutoff_game_minute)}</div></div>`).join("") || '<div class="empty">Aucune page rappelée. Utilise l’onglet Recall.</div>';
       $$('[data-wiki-index]').forEach(el => el.addEventListener("click", () => { const entry = pages[Number(el.dataset.wikiIndex)]; $$('[data-wiki-index]').forEach(x => x.classList.remove("selected")); el.classList.add("selected"); renderWikiPage(ui.wikiReader, entry, "version connue au départ"); }));
     } else {
       ui.wikiTitle.textContent = "Wiki du hub";
@@ -182,7 +203,7 @@ async function refreshRecallBadge() {
 }
 
 function renderRecallLibrary(pages) {
-  ui.recallLibrary.innerHTML = pages.map((entry, i) => `<div class="knowledge-item" data-recalled-index="${i}"><div class="title">${esc(entry.page.title)}</div><div class="small">rappelée par personnage #${entry.recall.character_id} · m.${entry.recall.recalled_at_game_minute}</div></div>`).join("") || '<div class="empty">Aucune page rappelée par le groupe.</div>';
+  ui.recallLibrary.innerHTML = pages.map((entry, i) => `<div class="knowledge-item" data-recalled-index="${i}"><div class="title">${esc(entry.page.title)}</div><div class="small">rappelée par personnage #${entry.recall.character_id} · ${formatGameDate(entry.recall.recalled_at_game_minute)}</div></div>`).join("") || '<div class="empty">Aucune page rappelée par le groupe.</div>';
   $$('[data-recalled-index]').forEach(el => el.addEventListener("click", () => { const entry = pages[Number(el.dataset.recalledIndex)]; $$('[data-recalled-index]').forEach(x => x.classList.remove("selected")); el.classList.add("selected"); renderWikiPage(ui.recallReader, entry, "mémoire partagée de l’expédition"); }));
 }
 
@@ -201,7 +222,7 @@ async function loadRecall() {
       api(`/api/expeditions/${state.expedition.id}/recall/status?character_id=${state.character.id}`),
       api(`/api/expeditions/${state.expedition.id}/recall`),
     ]);
-    ui.recallStatusLine.textContent = `${state.character.name} : ${status.remaining}/${status.limit} recalls restants · wiki figé à la minute ${status.knowledge_cutoff_game_minute}.`;
+    ui.recallStatusLine.textContent = `${state.character.name} : ${status.remaining}/${status.limit} recalls restants · wiki figé à ${formatGameDate(status.knowledge_cutoff_game_minute)}.`;
     ui.recallBadge.textContent = status.remaining; ui.recallBadge.classList.remove("hidden");
     renderRecallLibrary(library.pages || []);
   } catch (e) { ui.recallMessage.textContent = e.message; }
@@ -215,7 +236,7 @@ async function searchRecall(event) {
   try {
     const result = await api(`/api/expeditions/${state.expedition.id}/recall/search?character_id=${state.character.id}&q=${encodeURIComponent(q)}`);
     const pages = result.results || [];
-    ui.recallMessage.textContent = `${pages.length} résultat(s) dans le wiki connu à la minute ${result.knowledge_cutoff_game_minute}.`;
+    ui.recallMessage.textContent = `${pages.length} résultat(s) dans le wiki connu à ${formatGameDate(result.knowledge_cutoff_game_minute)}.`;
     ui.recallResults.innerHTML = pages.map((entry, i) => `<div class="knowledge-item"><div class="title">${esc(entry.page.title)}</div><div class="small">${esc(entry.page.category || "Wiki")} · révision ${entry.revision.revision}</div><div class="recall-result-actions"><span class="small">page #${entry.page.id}</span><button type="button" data-recall-index="${i}">Rappeler</button></div></div>`).join("") || '<div class="empty">Aucun résultat.</div>';
     $$('[data-recall-index]').forEach(btn => btn.addEventListener("click", () => recallPage(pages[Number(btn.dataset.recallIndex)])));
   } catch (e) { ui.recallMessage.textContent = e.message; }
@@ -302,7 +323,7 @@ async function loadCharacterSheetData(characterId){
   state.sheetLoadedVersion = current.version;
   fillSheetForm(current.data);
   ui.sheetCurrentLabel.textContent = `Version ${current.version} · actuelle`;
-  ui.sheetCurrentMeta.textContent = `Enregistrée à la minute ${current.campaign_game_minute}. La base de données est la source de vérité.`;
+  ui.sheetCurrentMeta.textContent = `Enregistrée à ${formatGameDate(current.campaign_game_minute)}. La base de données est la source de vérité.`;
   ui.sheetExportPdf.href = sheetPdfUrl(characterId);
   ui.sheetExportPdf.classList.remove('hidden');
   renderSheetHistory();
@@ -310,7 +331,7 @@ async function loadCharacterSheetData(characterId){
 
 function renderSheetHistory(){
   const characterId = state.character?.id;
-  ui.sheetHistory.innerHTML = state.sheetVersions.map(v => `<div class="sheet-version ${v.is_current ? 'current' : ''} ${state.sheetLoadedVersion === v.version ? 'loaded' : ''}"><div><strong>Version ${v.version}${v.is_current ? ' · actuelle' : ''}</strong><div class="muted compact">minute ${v.campaign_game_minute} · ${new Date(v.created_at).toLocaleString('fr-BE')}</div></div><div class="sheet-version-actions"><button type="button" class="secondary" data-sheet-load-version="${v.version}">Charger</button><a class="button-link" target="_blank" rel="noopener" href="${sheetPdfUrl(characterId, v.version)}">PDF</a></div></div>`).join('') || '<div class="empty">Aucune version.</div>';
+  ui.sheetHistory.innerHTML = state.sheetVersions.map(v => `<div class="sheet-version ${v.is_current ? 'current' : ''} ${state.sheetLoadedVersion === v.version ? 'loaded' : ''}"><div><strong>Version ${v.version}${v.is_current ? ' · actuelle' : ''}</strong><div class="muted compact">${formatGameDate(v.campaign_game_minute)} · ${new Date(v.created_at).toLocaleString('fr-BE')}</div></div><div class="sheet-version-actions"><button type="button" class="secondary" data-sheet-load-version="${v.version}">Charger</button><a class="button-link" target="_blank" rel="noopener" href="${sheetPdfUrl(characterId, v.version)}">PDF</a></div></div>`).join('') || '<div class="empty">Aucune version.</div>';
   $$('[data-sheet-load-version]').forEach(button => button.addEventListener('click', () => loadSheetVersion(Number(button.dataset.sheetLoadVersion))));
 }
 
@@ -385,6 +406,8 @@ async function load() {
     qs("user", id);
     const [user, campaigns, invitations, characters] = await Promise.all([api(`/api/users/${id}`), api(`/api/campaigns/by-user/${id}`), api(`/api/users/${id}/campaign-invitations`), api(`/api/users/${id}/characters`)]);
     state.user = user; state.campaigns = campaigns; state.invitations = invitations; state.characters = characters; state.campaign = null; state.character = null; state.expedition = null;
+    if (ui.dashboardPingColor) ui.dashboardPingColor.value = user.ping_color || "#ff4f64";
+    ui.dashboardPingColorControl?.classList.remove("hidden");
     ui.userInfo.classList.remove("muted"); ui.userInfo.innerHTML = `<strong>${esc(user.username)}</strong> · ${esc(user.email)} · #${user.id}`;
     renderInvitations(); renderCampaigns(); renderCharacters(); renderExpeditions(); renderContext();
     const requested = Number(new URL(location.href).searchParams.get("campaign"));
@@ -404,6 +427,8 @@ ui.sheetDataForm.addEventListener("submit", saveCharacterSheet);
 ui.sheetDataForm.addEventListener("input", e => { if(e.target.name && ["strength","dexterity","constitution","intelligence","wisdom","charisma"].includes(e.target.name)) refreshAbilityModifiers(); });
 ui.refreshInvitations.addEventListener("click", () => refreshPlayerData());
 setInterval(() => { if(state.user && document.visibilityState === 'visible') refreshPlayerData().catch(()=>{}); }, 10000);
+ui.dashboardPingColor?.addEventListener("change", saveDashboardPingColor);
+ui.mapFrame?.addEventListener("load", () => { if (state.user) syncPingColorToMap(state.user.ping_color || ui.dashboardPingColor?.value || "#ff4f64"); });
 ui.loadBtn.addEventListener("click", load);
 ui.userId.addEventListener("keydown", e => { if (e.key === "Enter") load(); });
 $$(".tab").forEach(tab => tab.addEventListener("click", () => setTab(tab.dataset.tab)));

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hexploration Timeline</title>
     <link rel="stylesheet" href="/css/timeline.css">
-    <script type="module" src="/js/timeline.js"></script>
+    <script type="module" src="/js/timeline.js?v=460"></script>
 </head>
 <body>
 <a href="/dashboard.html">Dashboard</a> · <a href="/dm.html">DM</a>
@@ -29,26 +29,24 @@
             </div>
 
             <h2>Filtres</h2>
-            <div class="filter-grid">
-                <label>Depuis minute<input id="filter-from" type="number" min="0"></label>
-                <label>Jusqu'à minute<input id="filter-to" type="number" min="0"></label>
-                <label>Type<input id="filter-event-type" placeholder="WEATHER_CHANGED"></label>
-                <label>Target type<input id="filter-target-type" placeholder="POI"></label>
-                <label>Target ID<input id="filter-target-id" type="number" min="1"></label>
+            <div class="filter-date-row">
+              <fieldset><legend>Depuis</legend><div class="date-grid date-grid-five optional-date">
+                <label>A<input id="filter-from-year" type="number" min="0"></label><label>M<input id="filter-from-month" type="number" min="1" max="12"></label><label>J<input id="filter-from-day" type="number" min="1" max="30"></label><label>H<input id="filter-from-hour" type="number" min="0" max="23"></label><label>Min<input id="filter-from-minute" type="number" min="0" max="59"></label>
+              </div></fieldset>
+              <fieldset><legend>Jusqu'à</legend><div class="date-grid date-grid-five optional-date">
+                <label>A<input id="filter-to-year" type="number" min="0"></label><label>M<input id="filter-to-month" type="number" min="1" max="12"></label><label>J<input id="filter-to-day" type="number" min="1" max="30"></label><label>H<input id="filter-to-hour" type="number" min="0" max="23"></label><label>Min<input id="filter-to-minute" type="number" min="0" max="59"></label>
+              </div></fieldset>
             </div>
+            <div class="filter-grid"><label>Type<input id="filter-event-type" placeholder="WEATHER_CHANGED"></label><label>Target type<input id="filter-target-type" placeholder="POI"></label><label>Target ID<input id="filter-target-id" type="number" min="1"></label></div>
             <div class="button-row">
                 <button id="apply-filters-btn" type="button">Appliquer</button>
                 <button id="clear-filters-btn" type="button" class="secondary">Effacer</button>
             </div>
 
             <h2>Inspecter le monde</h2>
-            <div class="inline-fields">
-                <label>
-                    Minute
-                    <input id="inspect-minute" type="number" min="0" value="0">
-                </label>
-                <button id="inspect-btn" type="button">Résoudre l'état</button>
-            </div>
+            <div class="date-grid date-grid-five inspect-date">
+              <label>Année<input id="inspect-time-year" type="number" min="0" value="0"></label><label>Mois<input id="inspect-time-month" type="number" min="1" max="12" value="1"></label><label>Jour<input id="inspect-time-day" type="number" min="1" max="30" value="1"></label><label>Heure<input id="inspect-time-hour" type="number" min="0" max="23" value="0"></label><label>Minute<input id="inspect-time-minute" type="number" min="0" max="59" value="0"></label>
+            </div><button id="inspect-btn" type="button">Résoudre l'état</button>
             <pre id="world-state" class="state-box">Aucun état chargé.</pre>
         </section>
 
@@ -75,12 +73,14 @@
 
             <fieldset>
                 <legend>Date de campagne</legend>
-                <div class="date-grid">
-                    <label>Jour<input id="event-day" type="number" min="1" value="1" required></label>
+                <div class="date-grid date-grid-five">
+                    <label>Année<input id="event-year" type="number" min="0" value="0" required></label>
+                    <label>Mois<input id="event-month" type="number" min="1" max="12" value="1" required></label>
+                    <label>Jour<input id="event-day" type="number" min="1" max="30" value="1" required></label>
                     <label>Heure<input id="event-hour" type="number" min="0" max="23" value="0" required></label>
-                    <label>Minute<input id="event-minute-part" type="number" min="0" max="59" value="0" required></label>
+                    <label>Minute<input id="event-minute" type="number" min="0" max="59" value="0" required></label>
                 </div>
-                <div class="computed-minute">game_minute: <strong id="computed-game-minute">0</strong></div>
+                <div class="computed-minute">Date: <strong id="computed-game-date">A0 · M1 · J1 · 00:00</strong></div>
             </fieldset>
 
             <label>

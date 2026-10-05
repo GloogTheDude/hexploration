@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hexploration — Expedition Map</title>
+    <title>Hexploration — Carte joueur</title>
     <link rel="stylesheet" href="/css/player.css">
-    <script type="module" src="/js/player.js?v=292"></script>
+    <script type="module" src="/js/player.js?v=494"></script>
 </head>
 <body>
 <header class="topbar">
     <div>
-        <h1>Expedition Map</h1>
+        <h1>Carte joueur</h1>
         <p id="subtitle">Carte connue du groupe — aucune information MJ non découverte.</p>
     </div>
     <nav>
@@ -36,13 +36,10 @@
             Charge une expédition active ou positionnée.
         </section>
 
-        <section>
-            <h2>Déplacement</h2>
-            <p id="selection-label" class="muted">Sélectionne un hex adjacent.</p>
-            <label>Durée de base (minutes)
-                <input id="base-duration" type="number" min="1" value="60">
-            </label>
-            <button id="move-btn" type="button" disabled>Déplacer l'expédition</button>
+        <section id="ping-controls">
+            <h2>Ping joueur</h2>
+            <p id="selection-label" class="muted">Clique simplement un hex adjacent pour le ping.</p>
+            <p class="muted small">Le ping clignote quelques secondes. Seul le MJ déplace réellement l’expédition.</p>
         </section>
 
         <section>
@@ -53,18 +50,27 @@
         <section>
             <h2>Légende</h2>
             <div class="legend-row"><span class="legend-swatch unknown"></span> Inconnu / destination possible</div>
-            <div class="legend-row"><span class="legend-swatch seen"></span> Vu</div>
-            <div class="legend-row"><span class="legend-swatch visited"></span> Visité</div>
+            <div class="legend-row"><span class="legend-swatch visible"></span> Visible maintenant</div>
+            <div class="legend-row"><span class="legend-swatch seen"></span> Vu · hors champ de vision</div>
             <div class="legend-row"><span class="legend-dot"></span> Position actuelle</div>
         </section>
     </aside>
 
     <section class="map-panel">
+        <div id="ping-toolbar" class="ping-toolbar">
+            <label id="ping-user-control" class="ping-user-control hidden">Joueur
+                <select id="ping-user"></select>
+            </label>
+            <label id="ping-color-control" class="ping-color-control">Couleur du ping
+                <input id="ping-color" type="color" value="#ff4f64" aria-label="Couleur du ping">
+            </label>
+            <span class="ping-help">Clic sur un hex adjacent = ping</span>
+        </div>
         <canvas id="player-canvas" width="1200" height="760"></canvas>
         <div class="map-actions">
             <button id="fit-btn" type="button">Recentrer</button>
             <button id="refresh-btn" type="button">Actualiser</button>
-            <span>Molette: zoom · glisser: déplacer · clic: sélectionner</span>
+            <span>Molette: zoom · glisser: déplacer · clic: ping sur un hex adjacent</span>
         </div>
     </section>
 

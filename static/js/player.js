@@ -1,7 +1,13 @@
+import { formatGameDate } from './game_time.js';
 import { axialToPixel, pixelToAxial, hexDistance } from "./hex_math.js";
 
-const embeddedMode = new URLSearchParams(window.location.search).get("embedded") === "1";
+const params = new URLSearchParams(window.location.search);
+const embeddedMode = params.get("embedded") === "1";
+const displayMode = params.get("display") === "1";
+const urlUserId = Number(params.get("user"));
+let activePingUserId = urlUserId || 0;
 if (embeddedMode) document.body.classList.add("embedded");
+if (displayMode) document.body.classList.add("shared-display");
 
 const canvas = document.querySelector("#player-canvas");
 const ctx = canvas.getContext("2d");
@@ -9,8 +15,12 @@ const expeditionInput = document.querySelector("#expedition-id");
 const loadBtn = document.querySelector("#load-btn");
 const refreshBtn = document.querySelector("#refresh-btn");
 const fitBtn = document.querySelector("#fit-btn");
-const moveBtn = document.querySelector("#move-btn");
-const durationInput = document.querySelector("#base-duration");
+const pingControls = document.querySelector("#ping-controls");
+const pingColorControl = document.querySelector("#ping-color-control");
+const pingColor = document.querySelector("#ping-color");
+const pingToolbar = document.querySelector("#ping-toolbar");
+const pingUserControl = document.querySelector("#ping-user-control");
+const pingUser = document.querySelector("#ping-user");
 const info = document.querySelector("#expedition-info");
 const hexInfo = document.querySelector("#hex-info");
 const selectionLabel = document.querySelector("#selection-label");
@@ -37,6 +47,7 @@ let view = { scale: 1, offsetX: 0, offsetY: 0 };
 let dragging = false;
 let dragStart = null;
 let dragMoved = false;
+let pingFlashUntil = 0;
 
 function key(q, r) { return `${q},${r}`; }
 function showToast(message) {
@@ -46,6 +57,7 @@ function showToast(message) {
 }
 async function api(path, options = {}) {
     const response = await fetch(path, {
+        cache: "no-store",
         headers: {"Content-Type": "application/json", ...(options.headers || {})},
         ...options,
     });
@@ -123,7 +135,7 @@ function knownMap() {
 }
 
 function ghostNeighbors() {
-    if (!state) return [];
+    if (!state || state.expedition_status !== "ACTIVE") return [];
     return DIRECTIONS.map(d => ({q: state.current_q + d.q, r: state.current_r + d.r}));
 }
 
@@ -165,12 +177,54 @@ function draw() {
         const p = worldToScreen(hex.q, hex.r);
         hexPath(p.x, p.y, size - 1);
         ctx.fillStyle = terrainColor(hex.terrain_key);
-        ctx.globalAlpha = hex.discovery_state === "SEEN" ? 0.58 : 0.92;
-        ctx.fill();
         ctx.globalAlpha = 1;
-        ctx.strokeStyle = hex.discovery_state === "VISITED" ? "#e6c56a" : "#344454";
-        ctx.lineWidth = hex.discovery_state === "VISITED" ? 2.5 : 1.2;
+        ctx.fill();
+        if (hex.visibility_state !== "VISIBLE") {
+            // Heroes-style memory state: keep the terrain recognizable but
+            // make it unmistakably stale compared with current vision.
+            hexPath(p.x, p.y, size - 1);
+            ctx.fillStyle = "rgba(2, 7, 9, .58)";
+            ctx.fill();
+        }
+        ctx.strokeStyle = hex.visibility_state === "VISIBLE" ? "#a9d99a" : "#2f4150";
+        ctx.lineWidth = hex.visibility_state === "VISIBLE" ? 2.4 : 1.15;
         ctx.stroke();
+    }
+
+    // Area features are clipped server-side to known cells, so lakes and
+    // wetlands can be rendered without revealing their unexplored extent.
+    for (const area of state.areas || []) {
+        for (const cell of area.cells || []) {
+            const knownHex = known.get(key(cell.q, cell.r));
+            if (!knownHex) continue;
+            const p = worldToScreen(cell.q, cell.r);
+            hexPath(p.x, p.y, size - 2);
+            ctx.save();
+            ctx.globalAlpha = knownHex.visibility_state === "VISIBLE" ? .34 : .16;
+            ctx.fillStyle = (area.feature_type === "LAKE" || area.feature_type === "INLAND_SEA")
+                ? "#54a9d9" : area.feature_type === "WETLAND" ? "#6e9270" : "#b0a26c";
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    // Semantic geometry is rendered only when the backend says the segment is
+    // known.  SEEN segments stay visible as memory but are deliberately dimmer.
+    for (const edge of state.edges || []) {
+        const a = worldToScreen(edge.from_q, edge.from_r);
+        const b = worldToScreen(edge.to_q, edge.to_r);
+        const aHex = known.get(key(edge.from_q, edge.from_r));
+        const bHex = known.get(key(edge.to_q, edge.to_r));
+        const live = aHex?.visibility_state === "VISIBLE" && bHex?.visibility_state === "VISIBLE";
+        ctx.save();
+        ctx.globalAlpha = live ? 0.95 : 0.5;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = edge.feature_type === "RIVER" ? "#6fbce8" : edge.feature_type === "ROAD" ? "#d9c178" : "#c8a2d8";
+        ctx.lineWidth = Math.max(2, 3 * view.scale);
+        ctx.stroke();
+        ctx.restore();
     }
 
     if (selected) {
@@ -184,13 +238,60 @@ function draw() {
     for (const poi of state.pois) {
         const p = worldToScreen(poi.q, poi.r);
         const y = p.y - size * 0.15;
+        const remembered = known.get(key(poi.q, poi.r))?.visibility_state !== "VISIBLE";
+        ctx.save();
+        ctx.globalAlpha = remembered ? 0.62 : 1;
         ctx.beginPath();
-        ctx.arc(p.x, y, Math.max(4, 6 * view.scale), 0, Math.PI * 2);
+        ctx.arc(p.x, y, Math.max(5, 7 * view.scale), 0, Math.PI * 2);
         ctx.fillStyle = poi.exists === false ? "#9c7373" : "#ffd479";
         ctx.fill();
-        ctx.strokeStyle = "#13171b";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#10151a";
+        ctx.lineWidth = Math.max(2, 2.5 * view.scale);
         ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(p.x, y, Math.max(8, 10 * view.scale), 0, Math.PI * 2);
+        ctx.strokeStyle = "#f6e6a8";
+        ctx.lineWidth = Math.max(1, 1.5 * view.scale);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    if (state.ping_q != null && state.ping_r != null) {
+        const created = state.ping_created_at ? new Date(state.ping_created_at).getTime() : Date.now();
+        const age = Date.now() - created;
+        if (age < 3200 && Math.floor(age / 280) % 2 === 0) {
+            const ping = worldToScreen(state.ping_q, state.ping_r);
+            ctx.beginPath();
+            ctx.arc(ping.x, ping.y, Math.max(10, 13 * view.scale), 0, Math.PI * 2);
+            ctx.strokeStyle = state.ping_color || "#ff4f64";
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(ping.x - 9, ping.y); ctx.lineTo(ping.x + 9, ping.y);
+            ctx.moveTo(ping.x, ping.y - 9); ctx.lineTo(ping.x, ping.y + 9);
+            ctx.stroke();
+        }
+    }
+
+    if (state.dm_ping_q != null && state.dm_ping_r != null) {
+        const created = state.dm_ping_created_at ? new Date(state.dm_ping_created_at).getTime() : Date.now();
+        const age = Date.now() - created;
+        if (age < 3200 && Math.floor(age / 280) % 2 === 0) {
+            const ping = worldToScreen(state.dm_ping_q, state.dm_ping_r);
+            const r = Math.max(11, 14 * view.scale);
+            ctx.save();
+            ctx.translate(ping.x, ping.y);
+            ctx.rotate(Math.PI / 4);
+            ctx.strokeStyle = state.dm_ping_color || "#55c7ff";
+            ctx.lineWidth = 4;
+            ctx.strokeRect(-r * .65, -r * .65, r * 1.3, r * 1.3);
+            ctx.rotate(-Math.PI / 4);
+            ctx.beginPath();
+            ctx.moveTo(-8, -8); ctx.lineTo(8, 8);
+            ctx.moveTo(8, -8); ctx.lineTo(-8, 8);
+            ctx.stroke();
+            ctx.restore();
+        }
     }
 
     const current = worldToScreen(state.current_q, state.current_r);
@@ -227,8 +328,9 @@ function renderInfo() {
     info.classList.remove("muted");
     info.innerHTML = `
         <div><strong>${state.expedition_name}</strong> · ${state.expedition_status}</div>
+        ${state.expedition_status === "ACTIVE" ? "" : '<div><strong>Archive en lecture seule</strong></div>'}
         <div>Carte: <strong>${state.map_name}</strong> · v${state.map_version}</div>
-        <div>Minute: <strong>${state.current_game_minute}</strong></div>
+        <div>Date: <strong>${formatGameDate(state.current_game_minute)}</strong></div>
         <div>Position: <strong>(${state.current_q}, ${state.current_r})</strong></div>
         <div>Météo: <strong>${state.weather_key || "—"}</strong></div>
         <div>Transport: <strong>${state.transport_key || "—"}</strong></div>
@@ -239,7 +341,8 @@ function renderInfo() {
         <div class="poi-card ${poi.exists === false ? "destroyed" : ""}" data-q="${poi.q}" data-r="${poi.r}">
             <strong>${escapeHtml(poi.name)}</strong>
             <div>${escapeHtml(poi.kind || "POI")} · (${poi.q}, ${poi.r})</div>
-            <div>${escapeHtml(poi.state || "état inconnu")} · vu m.${poi.observed_game_minute}</div>
+            <div>${escapeHtml(poi.state || "état inconnu")} · vu ${formatGameDate(poi.observed_game_minute)}</div>
+            ${poi.description ? `<p>${escapeHtml(poi.description)}</p>` : ""}
         </div>`).join("") : "Aucun POI connu.";
     poiList.querySelectorAll(".poi-card").forEach(card => card.addEventListener("click", () => {
         selected = {q: Number(card.dataset.q), r: Number(card.dataset.r)};
@@ -254,23 +357,24 @@ function escapeHtml(value) {
 
 function updateSelection() {
     if (!state || !selected) {
-        moveBtn.disabled = true;
-        selectionLabel.textContent = "Sélectionne un hex adjacent.";
+        selectionLabel.textContent = state?.expedition_status === "ACTIVE"
+            ? "Clique simplement un hex adjacent pour le ping."
+            : "Expédition terminée · consultation historique en lecture seule.";
         hexInfo.textContent = "Aucun hex sélectionné.";
         return;
     }
     const known = knownMap().get(key(selected.q, selected.r));
     const distance = hexDistance({q: state.current_q, r: state.current_r}, selected);
-    const adjacent = distance === 1;
-    selectionLabel.textContent = `Destination: (${selected.q}, ${selected.r})${known ? "" : " · inconnue"}`;
-    moveBtn.disabled = !adjacent || state.expedition_status !== "ACTIVE";
+    selectionLabel.textContent = state.expedition_status === "ACTIVE"
+        ? `Clic sur (${selected.q}, ${selected.r})${distance === 1 ? " · ping envoyé si cliqué" : " · hors portée de ping"}`
+        : "Archive · aucun ping possible.";
     hexInfo.classList.toggle("muted", !known);
     hexInfo.innerHTML = known ? `
         <div><strong>(${known.q}, ${known.r})</strong></div>
-        <div>${known.discovery_state}</div>
+        <div>${known.visibility_state === "VISIBLE" ? "VISIBLE maintenant" : "VU · dernière observation connue"}</div>
         <div>Terrain: <strong>${escapeHtml(known.terrain_key)}</strong></div>
         <div>Élévation: ${known.elevation}</div>
-        <div>Dernière observation: m.${known.observed_game_minute}</div>` : `
+        <div>Dernière observation: ${formatGameDate(known.observed_game_minute)}</div>` : `
         <div><strong>(${selected.q}, ${selected.r})</strong></div>
         <div>UNKNOWN — aucune donnée terrain révélée.</div>`;
     draw();
@@ -283,28 +387,21 @@ function centerOn(q, r) {
     draw();
 }
 
-async function loadMap({fit = false, allowBootstrap = true} = {}) {
+async function loadMap({fit = false} = {}) {
     const id = Number(expeditionInput.value);
     if (!id) return;
     errorBox.textContent = "";
     bootstrapNote.textContent = "";
     try {
         if (!Object.keys(terrains).length) terrains = await api("/api/terrains");
+        // Player display is read-only with regard to discovery. Merely opening
+        // or polling the map must never create observations or reveal a POI.
         state = await api(`/api/expeditions/${id}/player-map`);
-
-        if (allowBootstrap && state.expedition_status === "ACTIVE" && state.hexes.length === 0) {
-            bootstrapNote.textContent = "Initialisation de la visibilité à la position actuelle…";
-            const bootstrap = await api(`/api/expeditions/${id}/player-map/bootstrap`, {method: "POST"});
-            if (bootstrap.initialized) {
-                bootstrapNote.textContent = `Visibilité initialisée maintenant: ${bootstrap.map_observations_created} hex, ${bootstrap.poi_observations_created} POI.`;
-                state = await api(`/api/expeditions/${id}/player-map`);
-            } else {
-                bootstrapNote.textContent = "La connaissance cartographique était déjà initialisée.";
-            }
-        }
-
         selected = null;
         renderInfo();
+        const pingUnavailable = state.expedition_status !== "ACTIVE" || !activePingUserId;
+        pingControls?.classList.toggle("hidden", pingUnavailable);
+        pingColorControl?.classList.toggle("hidden", pingUnavailable);
         updateSelection();
         if (fit) fitKnownMap(); else draw();
     } catch (error) {
@@ -312,26 +409,101 @@ async function loadMap({fit = false, allowBootstrap = true} = {}) {
     }
 }
 
-async function move() {
-    if (!state || !selected || moveBtn.disabled) return;
-    moveBtn.disabled = true;
+async function pingHex(target) {
+    if (!state || state.expedition_status !== "ACTIVE" || !activePingUserId) return;
+    if (hexDistance({q: state.current_q, r: state.current_r}, target) !== 1) return;
+    const previousPing = {
+        q: state.ping_q, r: state.ping_r, gameMinute: state.ping_game_minute,
+        userId: state.ping_user_id, username: state.ping_username,
+        color: state.ping_color, createdAt: state.ping_created_at,
+    };
+    // Immediate local feedback: a single click visibly pings before the round trip.
+    state.ping_q = target.q;
+    state.ping_r = target.r;
+    state.ping_game_minute = state.current_game_minute;
+    state.ping_user_id = activePingUserId;
+    state.ping_color = pingColor?.value || "#ff4f64";
+    state.ping_created_at = new Date().toISOString();
+    pingFlashUntil = Date.now() + 3200;
+    errorBox.textContent = "";
+    draw();
     try {
-        const movement = await api(`/api/expeditions/${state.expedition_id}/move`, {
-            method: "POST",
-            body: JSON.stringify({
-                to_q: selected.q,
-                to_r: selected.r,
-                base_duration_minutes: Number(durationInput.value) || 60,
-            }),
+        const result = await api(`/api/expeditions/${state.expedition_id}/ping?user_id=${activePingUserId}`, {
+            method: "PUT",
+            body: JSON.stringify({q: target.q, r: target.r}),
         });
-        showToast(`Arrivée minute ${movement.arrival_game_minute} (+${movement.effective_duration_minutes} min)`);
-        await loadMap();
-        centerOn(state.current_q, state.current_r);
+        state.ping_q = result.q;
+        state.ping_r = result.r;
+        state.ping_game_minute = result.game_minute;
+        state.ping_user_id = result.user_id;
+        state.ping_username = result.username;
+        state.ping_color = result.color;
+        state.ping_created_at = result.created_at;
+        pingFlashUntil = Date.now() + 3200;
+        showToast(`Ping ${result.username || "joueur"} : (${result.q}, ${result.r})`);
+        draw();
     } catch (error) {
+        state.ping_q = previousPing.q; state.ping_r = previousPing.r;
+        state.ping_game_minute = previousPing.gameMinute; state.ping_user_id = previousPing.userId;
+        state.ping_username = previousPing.username; state.ping_color = previousPing.color;
+        state.ping_created_at = previousPing.createdAt;
         errorBox.textContent = error.message;
-        updateSelection();
+        draw();
     }
 }
+
+async function loadPingColor() {
+    if (!activePingUserId) {
+        pingControls?.classList.add("hidden");
+        pingColorControl?.classList.add("hidden");
+        return;
+    }
+    try {
+        const user = await api(`/api/users/${activePingUserId}`);
+        pingColor.value = user.ping_color || "#ff4f64";
+    } catch (_) {}
+}
+
+async function savePingColor() {
+    if (!activePingUserId) return;
+    try {
+        const user = await api(`/api/users/${activePingUserId}/ping-color`, {
+            method: "PUT", body: JSON.stringify({ping_color: pingColor.value}),
+        });
+        pingColor.value = user.ping_color;
+        showToast("Couleur du ping enregistrée.");
+    } catch (error) { errorBox.textContent = error.message; }
+}
+
+
+async function loadSharedPingUsers(expeditionId) {
+    if (!displayMode || !expeditionId || !pingUser) return;
+    try {
+        const participants = await api(`/api/expeditions/${expeditionId}/characters`);
+        const ownerIds = [];
+        const owners = [];
+        for (const participant of participants) {
+            const character = await api(`/api/characters/${participant.character_id}`);
+            if (!ownerIds.includes(character.owner_user_id)) {
+                ownerIds.push(character.owner_user_id);
+                const owner = await api(`/api/users/${character.owner_user_id}`);
+                owners.push(owner);
+            }
+        }
+        if (!owners.length) return;
+        pingUser.innerHTML = owners.map(u => `<option value="${u.id}">${u.username}</option>`).join("");
+        activePingUserId = owners[0].id;
+        pingUserControl?.classList.remove("hidden");
+        await loadPingColor();
+    } catch (error) {
+        errorBox.textContent = error.message;
+    }
+}
+
+pingUser?.addEventListener("change", async () => {
+    activePingUserId = Number(pingUser.value) || 0;
+    await loadPingColor();
+});
 
 canvas.addEventListener("pointerdown", event => {
     dragging = true; dragMoved = false;
@@ -356,6 +528,7 @@ canvas.addEventListener("pointerup", event => {
         const rect = canvas.getBoundingClientRect();
         selected = screenToHex(event.clientX - rect.left, event.clientY - rect.top);
         updateSelection();
+        if (state.expedition_status === "ACTIVE" && activePingUserId) pingHex(selected);
     }
 });
 canvas.addEventListener("wheel", event => {
@@ -377,7 +550,7 @@ canvas.addEventListener("wheel", event => {
 loadBtn.addEventListener("click", () => loadMap({fit: true}));
 refreshBtn.addEventListener("click", () => loadMap());
 fitBtn.addEventListener("click", fitKnownMap);
-moveBtn.addEventListener("click", move);
+pingColor?.addEventListener("change", savePingColor);
 window.addEventListener("resize", resizeCanvas);
 
 // ResizeObserver catches grid/sidebar/font changes that do not emit a window
@@ -388,7 +561,15 @@ canvasResizeObserver.observe(canvas);
 requestAnimationFrame(() => resizeCanvas());
 
 const initialExpedition = Number(new URLSearchParams(window.location.search).get("expedition"));
+loadPingColor();
 if (initialExpedition) {
     expeditionInput.value = String(initialExpedition);
-    loadMap({fit: true});
+    if (displayMode) {
+        loadSharedPingUsers(initialExpedition).finally(() => loadMap({fit: true}));
+    } else {
+        loadMap({fit: true});
+    }
 }
+
+window.setInterval(() => { if (state && document.visibilityState === "visible") loadMap().catch?.(()=>{}); }, 900);
+window.setInterval(() => { if (state && state.ping_created_at) draw(); }, 140);

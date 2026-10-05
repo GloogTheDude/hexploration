@@ -4,6 +4,7 @@ import { drawMap, requestMapDraw, resizeCanvasToDisplaySize } from "./renderer.j
 import { createTerrainButtons } from "./ui.js?v=320";
 import { mouseToHex, paintHexesBatchRadius, flushPendingPaint, beginPaintStroke, endPaintStroke, undoPaint, redoPaint, clearPaintHistory } from "./tools.js?v=320";
 import { axialToPixel, getHexLine } from "./hex_math.js?v=320";
+import { gameMinuteFromDateInputs, setDateInputs, formatGameDate } from "./game_time.js";
 
 const $ = (s) => document.querySelector(s);
 const canvas = $("#hex-canvas");
@@ -45,7 +46,7 @@ const persistMapBtn = $("#persist-map-btn");
 const persistMapMessage = $("#persist-map-message");
 const persistMapName = $("#persist-map-name");
 const persistVersionName = $("#persist-version-name");
-const persistEffectiveMinute = $("#persist-effective-minute");
+
 const saveModeWrap = $("#save-mode-wrap");
 const updateVersionNumber = $("#update-version-number");
 
@@ -226,7 +227,7 @@ async function refreshPersistedVersionOptions(selectVersionId = editorVersionId)
       option.dataset.versionNumber = String(version.version);
       option.dataset.versionName = version.name || "";
       option.dataset.minute = String(version.effective_from_game_minute);
-      option.textContent = `${map.name} · v${version.version}${version.name ? ` · ${version.name}` : ""} · m.${version.effective_from_game_minute}`;
+      option.textContent = `${map.name} · v${version.version}${version.name ? ` · ${version.name}` : ""} · ${formatGameDate(version.effective_from_game_minute)}`;
       if (version.id === selectVersionId) option.selected = true;
       persistedVersionSelect.appendChild(option);
     }
@@ -252,7 +253,7 @@ async function loadPersistedVersion(versionId = null) {
     persistMapName.value = selected.dataset.mapName || `Map #${mapId}`;
     persistVersionName.value = selected.dataset.versionName || `Version ${body.version}`;
     persistVersionName.dataset.auto = "0";
-    persistEffectiveMinute.value = selected.dataset.minute || "0";
+    setDateInputs("persist-time", Number(selected.dataset.minute || 0));
     campaignContextLabel.textContent = `Map #${mapId} · v${body.version} (#${body.map_version_id})`;
     updateUrlContext();
     setSaveModeUI();
@@ -306,7 +307,7 @@ async function createNewMap(event) {
   persistMapName.value = "Carte principale";
   persistVersionName.value = "Initial version";
   persistVersionName.dataset.auto = "0";
-  persistEffectiveMinute.value = "0";
+  setDateInputs("persist-time", 0);
   campaignContextLabel.textContent = `Campagne #${editorCampaignId} · nouveau brouillon`;
   updateUrlContext();
   setSaveModeUI();
@@ -339,7 +340,7 @@ async function persistEditorMap() {
         body: JSON.stringify({
           map_name: persistMapName.value.trim(),
           version_name: persistVersionName.value.trim() || null,
-          effective_from_game_minute: Number(persistEffectiveMinute.value),
+          effective_from_game_minute: gameMinuteFromDateInputs("persist-time"),
         }),
       });
       setMessage(`Carte #${body.map_id} · v${body.version} mise à jour · ${body.hex_count} hex.`);
@@ -350,7 +351,7 @@ async function persistEditorMap() {
         body: JSON.stringify({
           parent_version_id: editorVersionId,
           version_name: persistVersionName.value.trim() || null,
-          effective_from_game_minute: Number(persistEffectiveMinute.value),
+          effective_from_game_minute: gameMinuteFromDateInputs("persist-time"),
         }),
       });
       editorVersionId = body.map_version_id;
@@ -365,7 +366,7 @@ async function persistEditorMap() {
           name: persistMapName.value.trim(),
           description: null,
           version_name: persistVersionName.value.trim() || null,
-          effective_from_game_minute: Number(persistEffectiveMinute.value),
+          effective_from_game_minute: gameMinuteFromDateInputs("persist-time"),
         }),
       });
       editorMapId = body.map_id;

@@ -24,6 +24,6 @@ def test_v411_toolbar_and_cache_bust():
     assert 'class="toolbar-group toolbar-version"' in html
     assert 'class="inspector-world-time"' in html
     assert 'class="toolbar-group toolbar-history"' in html
-    assert '/js/world.js?v=444' in html
+    assert '/js/world.js?v=460' in html
     assert '/css/world.css?v=444' in html
     assert ".toolbar-group" in css

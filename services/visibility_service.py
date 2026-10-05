@@ -4,12 +4,13 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from db.models import CharacterKnowledgeObservation, CharacterMapHexObservation, ExpeditionStatus, MapHex, PointOfInterest
+from db.models import CharacterKnowledgeObservation, CharacterMapHexObservation, ExpeditionStatus, MapHex, MapVersion, PointOfInterest
 from repositories.knowledge_repository import KnowledgeRepository
 from repositories.visibility_repository import VisibilityRepository
 from services.errors import ConflictError, NotFoundError
 from services.poi_service import POIService
 from services.map_knowledge_service import MapKnowledgeService
+from services.map_hex_service import get_or_materialize_hex, materialize_radius
 from services.world_event_service import WorldEventService
 
 
@@ -107,6 +108,7 @@ class VisiblePOI:
     exists: bool
     world_event_id: int | None
     los_path: list[tuple[int, int]]
+    visible_at_distance: bool
 
 
 @dataclass(frozen=True)
@@ -318,13 +320,21 @@ class VisibilityService:
         ):
             raise ConflictError("Expedition has no current map position")
 
+        version = self.db.get(MapVersion, expedition.current_map_version_id)
+        if version is None:
+            raise NotFoundError("Map version not found")
+        origin = get_or_materialize_hex(self.db, version, expedition.current_q, expedition.current_r)
+        if origin is None:
+            raise ConflictError("Current expedition hex no longer exists")
+        # Sparse versions intentionally omit default-terrain rows. Materialise only
+        # the bounded visibility neighbourhood so implicit SEA/PLAIN cells take
+        # part in LOS and can become player observations without densifying maps.
+        scan_radius = max(0, origin.visibility_score) + LANDMARK_RANGE_BONUS + MAX_ELEVATION_BONUS
+        materialize_radius(self.db, version, origin.q, origin.r, scan_radius)
         all_hexes = {
             (hex_tile.q, hex_tile.r): hex_tile
             for hex_tile in self.repo.list_hexes(expedition.current_map_version_id)
         }
-        origin = all_hexes.get((expedition.current_q, expedition.current_r))
-        if origin is None:
-            raise ConflictError("Current expedition hex no longer exists")
 
         weather_key = self.world.weather_at(
             expedition.campaign_id,
@@ -446,6 +456,7 @@ class VisibilityService:
                         state.latest_event.id if state.latest_event is not None else None
                     ),
                     los_path=los.path,
+                    visible_at_distance=state.visible_at_distance,
                 )
             )
 
@@ -472,6 +483,7 @@ class VisibilityService:
         return {
             "name": item.poi.name,
             "kind": item.poi.kind,
+            "description": item.poi.player_description,
             "map_version_id": map_version_id,
             "q": item.hex.q,
             "r": item.hex.r,
@@ -493,6 +505,20 @@ class VisibilityService:
         for item in scan.visible_pois:
             snapshot = self._snapshot(item, scan.map_version_id)
             for participant in participants:
+                latest = self.knowledge.latest_for_target(
+                    character_id=participant.character_id,
+                    target_type="POI",
+                    target_id=item.poi.feature_id,
+                )
+                # Explicit DM hiding is authoritative until the DM reveals the
+                # POI again. Merely being inside the current field of view must
+                # never recreate knowledge that was deliberately revoked.
+                if latest is not None and latest.knowledge.get("hidden_from_players", False):
+                    continue
+                # A search-required POI must first be explicitly revealed by the
+                # DM. Once discovered, later visible changes can be observed normally.
+                if item.poi.requires_discovery and latest is None:
+                    continue
                 existing_exact = self.knowledge.get_exact(
                     character_id=participant.character_id,
                     expedition_id=expedition_id,
@@ -503,11 +529,6 @@ class VisibilityService:
                 if existing_exact is not None:
                     continue
 
-                latest = self.knowledge.latest_for_target(
-                    character_id=participant.character_id,
-                    target_type="POI",
-                    target_id=item.poi.feature_id,
-                )
                 if (
                     latest is not None
                     and latest.expedition_id == expedition_id

@@ -4,7 +4,9 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from db.models import CharacterKnowledgeObservation, Expedition, ExpeditionStatus, MapVersion, WorldMap
+from sqlalchemy import select
+
+from db.models import CharacterKnowledgeObservation, Expedition, ExpeditionStatus, MapArea, MapEdge, MapVersion, WorldMap
 from repositories.expedition_repository import ExpeditionRepository
 from repositories.knowledge_repository import KnowledgeRepository
 from services.errors import ConflictError, NotFoundError
@@ -19,6 +21,9 @@ class PlayerMapState:
     map_version: MapVersion
     hexes: list
     pois: list[CharacterKnowledgeObservation]
+    edges: list[MapEdge]
+    areas: list[dict]
+    visible_hex_coords: set[tuple[int, int]]
 
 
 class PlayerMapService:
@@ -60,7 +65,10 @@ class PlayerMapService:
                 previous.id,
             ):
                 latest[observation.target_id] = observation
-        return sorted(latest.values(), key=lambda item: item.target_id)
+        return sorted(
+            (item for item in latest.values() if not item.knowledge.get("hidden_from_players", False)),
+            key=lambda item: item.target_id,
+        )
 
     def get(self, expedition_id: int) -> PlayerMapState:
         expedition = self.expeditions.get(expedition_id)
@@ -92,12 +100,61 @@ class PlayerMapService:
             game_minute=expedition.current_game_minute,
             map_version_id=version.id,
         )
+
+        # Roads/rivers are obvious map geometry once both endpoint hexes have
+        # actually been observed.  Filtering against the historical knowledge
+        # set prevents the player API from leaking canonical geometry outside
+        # the explored area.  Temporal events remain separate world truth and
+        # are therefore not projected into stale SEEN tiles.
+        known_coords = {(row.q, row.r) for row in hexes}
+        candidate_edges = list(
+            self.db.scalars(
+                select(MapEdge)
+                .where(MapEdge.map_version_id == version.id)
+                .order_by(MapEdge.feature_type, MapEdge.feature_id, MapEdge.segment_index, MapEdge.id)
+            )
+        )
+        edges = [
+            edge for edge in candidate_edges
+            if (edge.from_q, edge.from_r) in known_coords
+            and (edge.to_q, edge.to_r) in known_coords
+            and edge.feature_type in {"ROAD", "RIVER", "BRIDGE", "PASSAGE", "TRAVERSAL"}
+        ]
+        # Area geometry is clipped to cells the group has actually observed.
+        # This preserves lakes/wetlands/regions without leaking the unexplored
+        # extent of a semantic area.
+        candidate_areas = list(
+            self.db.scalars(
+                select(MapArea)
+                .where(MapArea.map_version_id == version.id)
+                .order_by(MapArea.feature_type, MapArea.feature_id, MapArea.id)
+            )
+        )
+        areas: list[dict] = []
+        for area in candidate_areas:
+            cells = [
+                {"q": int(cell["q"]), "r": int(cell["r"])}
+                for cell in (area.cells or [])
+                if (int(cell.get("q", 10**9)), int(cell.get("r", 10**9))) in known_coords
+            ]
+            if cells:
+                areas.append({
+                    "feature_type": area.feature_type,
+                    "feature_id": area.feature_id,
+                    "name": area.name,
+                    "cells": cells,
+                })
+        scan = self.visibility.scan(expedition.id) if expedition.status == ExpeditionStatus.ACTIVE else None
+        visible_hex_coords = ({(item.hex.q, item.hex.r) for item in scan.visible_hexes} if scan else set())
         return PlayerMapState(
             expedition=expedition,
             world_map=world_map,
             map_version=version,
             hexes=hexes,
             pois=pois,
+            edges=edges,
+            areas=areas,
+            visible_hex_coords=visible_hex_coords,
         )
     def bootstrap(self, expedition_id: int) -> tuple[bool, int, int]:
         """Initialize fog-of-war for an already-running positioned expedition.
@@ -111,12 +168,10 @@ class PlayerMapService:
         if expedition.status != ExpeditionStatus.ACTIVE:
             raise ConflictError("Only an active expedition can bootstrap visibility")
 
-        # Existing map knowledge means this expedition has already entered the
-        # fog-of-war system. Re-running bootstrap should not manufacture a new
-        # historical observation.
-        if state.hexes:
-            return False, 0, 0
-
+        # Re-running visibility bootstrap is intentionally idempotent. This also
+        # repairs older sparse-map expeditions whose implicit default terrain
+        # (notably SEA) was never materialised/observed by the legacy renderer.
         result = self.visibility.observe_visible_pois(expedition_id)
-        return True, len(result.map_observations), len(result.observations)
+        created = len(result.map_observations) + len(result.observations)
+        return created > 0, len(result.map_observations), len(result.observations)
 

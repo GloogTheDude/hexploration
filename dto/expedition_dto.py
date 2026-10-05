@@ -25,6 +25,9 @@ class ExpeditionResponse(BaseModel):
     current_map_version_id: int | None
     current_q: int | None
     current_r: int | None
+    ping_q: int | None = None
+    ping_r: int | None = None
+    ping_game_minute: int | None = None
     created_at: datetime
 
 

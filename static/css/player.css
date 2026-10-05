@@ -36,8 +36,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .legend-row { display: flex; align-items: center; gap: 8px; margin: 7px 0; font-size: 12px; color: #aab7c5; }
 .legend-swatch { width: 20px; height: 16px; display: inline-block; border: 2px solid #526273; clip-path: polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%); }
 .legend-swatch.unknown { background: #11151a; border-color: #536170; }
-.legend-swatch.seen { background: #59697a; opacity: .65; }
-.legend-swatch.visited { background: #59697a; border-color: #f3d37a; }
+.legend-swatch.visible { background: #6f8c61; border-color: #9dc98b; }
+.legend-swatch.seen { background: #59697a; opacity: .55; }
 .legend-dot { width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px #1d76b8; margin-left: 4px; }
 .poi-list { display: grid; gap: 8px; font-size: 12px; }
 .poi-card { border: 1px solid #32404e; border-radius: 7px; padding: 9px; background: #1e2730; cursor: pointer; }
@@ -60,3 +60,22 @@ body.embedded .topbar { display: none; }
 body.embedded .player-layout { min-height: 100vh; }
 body.embedded #player-canvas { height: calc(100vh - 44px); }
 body.embedded .toast { position: absolute; }
+
+/* Shared table/second-monitor view opened by the DM. */
+body.shared-display .topbar nav,
+body.shared-display .sidebar { display: none; }
+body.shared-display .player-layout { grid-template-columns: minmax(0, 1fr) 300px; min-height: calc(100vh - 72px); }
+body.shared-display #player-canvas { height: calc(100vh - 116px); }
+
+/* Ping control stays available in normal, embedded and shared-display maps. */
+.ping-color-control { display: flex; align-items: center; gap: 7px; margin: 0; white-space: nowrap; color: #aebccd; }
+.ping-color-control input[type="color"] { width: 34px; height: 28px; padding: 2px; cursor: pointer; }
+body.shared-display .ping-color-control { display: flex; }
+
+/* Always-visible ping toolbar. It floats over the map so it cannot fall below the viewport. */
+.ping-toolbar { position:absolute; z-index:12; top:10px; left:10px; display:flex; align-items:center; gap:10px; padding:7px 9px; border:1px solid #46586a; border-radius:8px; background:#111820e8; box-shadow:0 6px 18px #0007; }
+.ping-toolbar .hidden { display:none !important; }
+.ping-user-control, .ping-color-control { display:flex; align-items:center; gap:7px; margin:0; white-space:nowrap; color:#d6e1ec; }
+.ping-user-control select { background:#212a34; color:#edf2f7; border:1px solid #3a4959; border-radius:6px; padding:5px 8px; }
+.ping-help { color:#9eabba; font-size:11px; }
+body.embedded .ping-toolbar, body.shared-display .ping-toolbar { top:10px; left:10px; }

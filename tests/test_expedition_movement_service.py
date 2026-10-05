@@ -203,3 +203,30 @@ def test_movement_uses_weather_at_expedition_departure_time(
         {"type": "terrain", "terrain_key": "FOREST", "multiplier": 1.5},
         {"type": "weather", "weather_key": "RAIN", "multiplier": 1.15},
     ]
+
+
+def test_undo_last_move_restores_position_and_clocks(db: Session, campaign: Campaign):
+    _, version, _, _ = make_map_with_two_hexes(db, campaign)
+    expedition, character = make_active_expedition(db, campaign, version, game_minute=100)
+    assert character is not None
+    service = ExpeditionMovementService(db)
+
+    movement = service.move(
+        expedition_id=expedition.id,
+        to_q=1,
+        to_r=0,
+        base_duration_minutes=60,
+    )
+    assert expedition.current_game_minute == movement.arrival_game_minute
+
+    undone = service.undo_last_move(expedition.id)
+
+    assert undone.id == movement.id
+    db.refresh(expedition)
+    db.refresh(character)
+    assert (expedition.current_q, expedition.current_r) == (0, 0)
+    assert expedition.current_game_minute == 100
+    assert character.current_game_minute == 100
+    assert db.scalar(select(Movement).where(Movement.id == movement.id)) is None
+    from dto.movement_dto import MovementResponse
+    assert MovementResponse.model_validate(undone).id == movement.id

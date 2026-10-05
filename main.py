@@ -27,7 +27,7 @@ from routes.invitation_routes import router as invitation_router
 
 app = FastAPI(
     title="Hexploration",
-    version="0.30.2-editor-navigation",
+    version="0.46-flow4-hub-calendar",
 )
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 

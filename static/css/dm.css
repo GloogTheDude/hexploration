@@ -14,3 +14,23 @@
 
 .campaign-settings-form{display:grid;gap:12px;margin-top:16px}.campaign-settings-form label{display:grid;gap:6px}.campaign-settings-form input,.campaign-settings-form textarea{width:100%}.danger{border-color:#8b3d45!important;color:#ffb7be!important}.campaign-settings-modal{width:min(620px,100%)}
 .map-title-actions,.map-version-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.danger-outline{border-color:#714444;color:#ffb2b2}.export-links{display:inline-flex;align-items:center;gap:0;border:1px solid #3b5063;border-radius:6px;overflow:hidden;background:#20303e}.export-label{padding:7px 9px;color:#9eb0c0;font-size:11px;border-right:1px solid #3b5063}.export-format{display:inline-flex;align-items:center;padding:7px 8px;font-size:11px;border-right:1px solid #3b5063;background:#20303e;white-space:nowrap}.export-format:last-child{border-right:0}.export-format:hover{background:#2a4052;color:#fff}@media(max-width:760px){.export-label{display:none}}
+
+/* Flow 4 — expedition composition is owned by the DM. */
+.planner-player { border: 1px solid var(--border, #334155); border-radius: 10px; padding: .65rem; margin-bottom: .65rem; }
+.planner-player-head { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; margin-bottom: .45rem; }
+.planner-player .character-pick { margin-top: .35rem; }
+
+/* Flow 4 — planner cleanup */
+.planner-grid-clean{grid-template-columns:minmax(220px,2fr) minmax(180px,1.2fr) minmax(240px,1.6fr)}
+.planner-date{margin:10px 0 0;border:1px solid #2d3d4a;border-radius:8px;padding:8px 10px}
+.planner-date legend{font-size:11px;color:#a9b8c7;padding:0 5px}
+.planner-date .game-date-grid,.world-inspect-date{display:grid;grid-template-columns:repeat(5,minmax(74px,1fr));gap:7px}
+.planner-date .game-date-grid label,.world-inspect-date label{display:grid;gap:4px;font-size:10px;color:#a9b8c7}
+.planner-date .game-date-grid input,.world-inspect-date input{min-width:0;text-align:center}
+.hub-summary{margin-top:9px;padding:9px 11px;border:1px solid #304151;border-radius:8px;background:#111a21}
+.hub-summary.error{border-color:#7b3d45;color:#efb0b8}
+.planner-player{min-width:220px;border-right:1px solid #2b3a46;padding-right:8px}
+.planner-player:last-child{border-right:0}
+.planner-player-head{display:flex;justify-content:space-between;gap:8px;margin-bottom:6px}
+@media(max-width:1000px){.planner-grid-clean{grid-template-columns:1fr 1fr}.planner-grid-clean .planner-name{grid-column:1/-1}.planner-date .game-date-grid,.world-inspect-date{grid-template-columns:repeat(5,minmax(58px,1fr))}}
+@media(max-width:650px){.planner-grid-clean{grid-template-columns:1fr}.planner-grid-clean .planner-name{grid-column:auto}.planner-date .game-date-grid,.world-inspect-date{grid-template-columns:repeat(2,1fr)}}

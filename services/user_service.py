@@ -45,3 +45,10 @@ class UserService:
         if user is None:
             raise NotFoundError("User not found")
         return user
+
+    def update_ping_color(self, user_id: int, ping_color: str) -> User:
+        user = self.get(user_id)
+        user.ping_color = ping_color.lower()
+        self.db.commit()
+        self.db.refresh(user)
+        return user

@@ -9,4 +9,4 @@ def test_world_editor_v443_layout_contract():
     assert "grid-template-columns:repeat(5,minmax(0,1fr))!important" in css
     assert "v44.4 — move world calendar into the inspector" in css
     assert "/css/world.css?v=444" in html
-    assert "/js/world.js?v=444" in html
+    assert "/js/world.js?v=460" in html

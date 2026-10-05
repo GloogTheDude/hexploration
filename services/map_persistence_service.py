@@ -270,7 +270,10 @@ class MapPersistenceService:
                 name=poi.name,
                 kind=poi.kind,
                 dm_description=poi.dm_description,
+                player_description=poi.player_description,
+                requires_discovery=poi.requires_discovery,
                 is_landmark=poi.is_landmark,
+                is_hub=poi.is_hub,
             ))
 
         parent_edges = list(self.db.scalars(select(MapEdge).where(MapEdge.map_version_id == parent.id)))

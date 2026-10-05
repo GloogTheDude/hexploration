@@ -9,6 +9,7 @@ from dto.movement_dto import (
     MapSnapshotCreate,
     MapSnapshotResponse,
     MovementResponse,
+    MovementUndoResponse,
 )
 from services.errors import (
     ConflictError,
@@ -136,6 +137,27 @@ def move_expedition(
         InvalidMovementError,
         ValueError,
     ) as exc:
+        _raise_http(exc)
+
+
+@router.post(
+    "/api/expeditions/{expedition_id}/move/undo",
+    response_model=MovementUndoResponse,
+)
+def undo_expedition_move(
+    expedition_id: int,
+    db: Session = Depends(get_db),
+) -> MovementUndoResponse:
+    try:
+        movement = ExpeditionMovementService(db).undo_last_move(expedition_id)
+        return MovementUndoResponse(
+            movement=MovementResponse.model_validate(movement),
+            expedition_id=expedition_id,
+            current_q=movement.from_q,
+            current_r=movement.from_r,
+            current_game_minute=movement.departure_game_minute,
+        )
+    except (NotFoundError, ConflictError) as exc:
         _raise_http(exc)
 
 

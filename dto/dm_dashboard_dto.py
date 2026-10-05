@@ -73,6 +73,8 @@ class DMCampaignSummary(BaseModel):
 class DMCharacterSummary(BaseModel):
     id: int
     owner_user_id: int
+    owner_username: str = ""
+    owner_role: CampaignRole | None = None
     name: str
     race: str | None
     character_class: str | None
@@ -106,6 +108,9 @@ class DMExpeditionSummary(BaseModel):
     current_r: int | None
     weather_key: str | None
     transport_key: str | None
+    ping_q: int | None = None
+    ping_r: int | None = None
+    ping_game_minute: int | None = None
     participants: list[DMExpeditionParticipantSummary]
 
 
@@ -120,6 +125,10 @@ class DMMapVersionSummary(BaseModel):
     hex_count: int
     poi_count: int
     edge_count: int
+    hub_poi_id: int | None = None
+    hub_name: str | None = None
+    hub_q: int | None = None
+    hub_r: int | None = None
 
 
 class DMMapSummary(BaseModel):
@@ -157,9 +166,6 @@ class DMExpeditionPlanCreate(BaseModel):
     start_game_minute: int
     character_ids: list[int]
     map_version_id: int
-    q: int
-    r: int
-    transport_key: str | None = "FOOT"
     start_now: bool = False
 
 
@@ -197,7 +203,10 @@ class DMPOIWorkbench(BaseModel):
     name: str
     kind: str | None
     dm_description: str | None
+    player_description: str | None = None
+    requires_discovery: bool = False
     is_landmark: bool
+    is_hub: bool = False
 
 
 class DMEdgeWorkbench(BaseModel):
@@ -248,14 +257,20 @@ class DMPOICreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     kind: str | None = Field(default=None, max_length=80)
     dm_description: str | None = None
+    player_description: str | None = None
+    requires_discovery: bool = False
     is_landmark: bool = False
+    is_hub: bool = False
 
 
 class DMPOIUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     kind: str | None = Field(default=None, max_length=80)
     dm_description: str | None = None
+    player_description: str | None = None
+    requires_discovery: bool = False
     is_landmark: bool | None = None
+    is_hub: bool | None = None
 
 
 class DMFeatureEdgeCreate(BaseModel):
@@ -271,6 +286,7 @@ class DMFeatureEdgeCreate(BaseModel):
 class DMTargetWorldEventCreate(BaseModel):
     game_minute: int = Field(ge=0)
     event_type: str = Field(min_length=1, max_length=120)
+    expedition_id: int | None = Field(default=None, gt=0)
     payload: dict[str, Any] = Field(default_factory=dict)
     dm_note: str | None = None
 
