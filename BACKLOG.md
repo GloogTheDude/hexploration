@@ -566,7 +566,7 @@ Result:
 
 Local PostgreSQL validation command:
 
-    TEST_DATABASE_URL='postgresql+psycopg://hexploration:hexploration@localhost:5435/hexploration_test' \
+    TEST_DATABASE_URL='postgresql+psycopg://hexploration:<password>@localhost:5435/hexploration_test' \
     ./.venv/bin/pytest -q
 
 
