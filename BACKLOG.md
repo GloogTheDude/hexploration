@@ -520,6 +520,22 @@ Result: The primary frontend pages retain cross-area navigation links for the ex
 
 ---
 
+# Phase 5 — Map/editor ownership
+
+### MAP-001 — Resolve legacy global editor ownership
+
+Status: `NEEDS_USER_DECISION`
+
+Audit result:
+
+- The persisted campaign/editor routes are scoped and authorized through `MapVersion → Map → Campaign`; POIs, edges and areas derive ownership through their map version, and player-map access remains separate and filtered.
+- The historical `/api/map`, `/api/hex/*` and `/api/newmap/*` routes are still actively called by `static/js/app.js` and `static/js/api.js`.
+- Those routes mutate a process-global in-memory `Hexmap` and accept no campaign, map or version identifier. Authentication alone would not establish ownership, so adding a generic DM check would not be safe.
+
+Decision required: migrate the legacy editor calls to the existing campaign-scoped persisted editor workflow and then retire/deprecate the global routes (recommended), or explicitly retain them as a development-only tool that is not exposed in a release deployment. No code change was made because the ownership policy for this global scratchpad is not inferable from the current domain model.
+
+---
+
 # Milestone 4 — Deployment
 
 ### DEPLOY-001 — Reproducible production setup
