@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi import Request
+from fastapi.responses import JSONResponse
 from starlette.middleware.gzip import GZipMiddleware
 
 from routes.map_routes import router as map_router
@@ -23,6 +25,8 @@ from routes.map_knowledge_routes import router as map_knowledge_router
 from routes.player_map_routes import router as player_map_router
 from routes.dm_dashboard_routes import router as dm_dashboard_router
 from routes.invitation_routes import router as invitation_router
+from routes.auth_routes import router as auth_router
+from services.csrf_service import csrf_failure
 
 
 app = FastAPI(
@@ -31,6 +35,15 @@ app = FastAPI(
 )
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 
+
+@app.middleware("http")
+async def csrf_middleware(request: Request, call_next):
+    failure = csrf_failure(request)
+    if failure is not None:
+        return JSONResponse(status_code=403, content={"detail": failure})
+    return await call_next(request)
+
+app.include_router(auth_router)
 app.include_router(map_router)
 app.include_router(health_router)
 app.include_router(user_router)

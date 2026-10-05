@@ -57,6 +57,30 @@ class User(Base):
     received_campaign_invitations: Mapped[list[CampaignInvitation]] = relationship(foreign_keys="CampaignInvitation.invited_user_id", back_populates="invited_user")
     sent_campaign_invitations: Mapped[list[CampaignInvitation]] = relationship(foreign_keys="CampaignInvitation.invited_by_user_id", back_populates="invited_by_user")
     characters: Mapped[list[Character]] = relationship(back_populates="owner")
+    sessions: Mapped[list[UserSession]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_user_session_token_hash"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
+
+    user: Mapped[User] = relationship(back_populates="sessions")
 
 
 class Campaign(Base):
