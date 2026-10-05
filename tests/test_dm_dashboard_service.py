@@ -149,24 +149,17 @@ def test_dm_can_create_character_for_campaign_member(db: Session, campaign):
 
 
 def test_dm_can_persist_current_editor_as_campaign_map(db: Session, campaign):
-    from dto.dm_dashboard_dto import DMEditorMapCreate
-    from models.hexmap import Hexmap
-    import routes.map_routes as map_routes
-
     dm = make_user(db, "map_admin")
     db.add(CampaignMembership(campaign_id=campaign.id, user_id=dm.id, role=CampaignRole.DM))
     db.commit()
 
-    previous = map_routes.hexmap
-    map_routes.hexmap = Hexmap(2, 2, 24)
-    try:
-        world_map, version, count = DMDashboardService(db).snapshot_editor_map(
-            campaign.id,
-            dm.id,
-            DMEditorMapCreate(name="First region", version_name="Opening state", effective_from_game_minute=0),
-        )
-    finally:
-        map_routes.hexmap = previous
+    from dto.dm_dashboard_dto import DMPersistentMapCreate
+
+    world_map, version, count = DMDashboardService(db).create_persistent_map(
+        campaign.id,
+        dm.id,
+        DMPersistentMapCreate(name="First region", version_name="Opening state", effective_from_game_minute=0, width=2, height=2, hex_size=24),
+    )
 
     assert world_map.campaign_id == campaign.id
     assert version.map_id == world_map.id

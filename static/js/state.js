@@ -1,5 +1,6 @@
 export const state = {
   map: {},
+  editor: { campaignId: null, mapId: null, versionId: null },
   terrains: {},
   selectedTerrainKey: null,
   isBrushOn: false,

@@ -652,7 +652,7 @@ DM-only endpoints added:
 ```text
 POST /api/campaigns/{campaign_id}/dm-members?user_id=...
 POST /api/campaigns/{campaign_id}/dm-characters?user_id=...
-POST /api/campaigns/{campaign_id}/dm-maps/from-editor?user_id=...
+POST /api/campaigns/{campaign_id}/dm-maps
 ```
 
 The terrain editor is campaign-aware when opened as:
@@ -661,9 +661,9 @@ The terrain editor is campaign-aware when opened as:
 /?user={dm_user_id}&campaign={campaign_id}
 ```
 
-It exposes a persistence bar that snapshots the current in-memory terrain into a new persistent `WorldMap` + initial `MapVersion`, using the existing frozen terrain movement/visibility values. The save endpoint verifies DM membership server-side. After persistence the new map becomes available in the DM dashboard Map Workbench and expedition planner.
+It exposes a persistence bar that creates a campaign-owned `WorldMap` + initial `MapVersion` and sends terrain edits directly to PostgreSQL, using the existing frozen terrain movement/visibility values. The save and paint endpoints verify DM membership and the real map/version relationship server-side. After creation the map becomes available in the DM dashboard Map Workbench and expedition planner.
 
-This version intentionally creates a *new* persistent map from the editor. Creating a later terrain `MapVersion` for an existing map is deferred until semantic POI/feature identity across versions is formalized, so temporal WorldEvent targets cannot silently break when rows are copied between versions.
+The editor no longer uses the historical process-global `Hexmap` routes. New maps and terrain edits are persisted in the selected campaign context.
 
 No Alembic migration is required for v22.
 
@@ -688,8 +688,11 @@ DM workflow:
 
 New DM endpoints:
 
-- `POST /api/campaigns/{campaign_id}/dm-map-versions/{map_version_id}/load-editor?user_id=...`
-- `POST /api/campaigns/{campaign_id}/dm-maps/{map_id}/versions/from-editor?user_id=...`
+- `POST /api/campaigns/{campaign_id}/dm-maps`
+- `POST /api/campaigns/{campaign_id}/dm-maps/{map_id}/dm-map-versions/{map_version_id}/hexes/paint`
+- `PUT /api/campaigns/{campaign_id}/dm-maps/{map_id}/dm-map-versions/{map_version_id}/hexes/exact`
+- `PATCH /api/campaigns/{campaign_id}/dm-maps/{map_id}/versions/{map_version_id}`
+- `POST /api/campaigns/{campaign_id}/dm-maps/{map_id}/versions`
 
 Database migration:
 

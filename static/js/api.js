@@ -1,63 +1,57 @@
-export async function fetchMap() {
-    const response = await fetch("/api/map");
-    return await response.json();
+import { state } from "./state.js?v=320";
+import { authFetch } from "./auth.js";
+
+async function jsonRequest(url, options = {}) {
+  const response = await authFetch(url, options);
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(typeof body?.detail === "string" ? body.detail : `${response.status} ${response.statusText}`);
+  }
+  return body;
+}
+
+export async function fetchPersistentMap(campaignId, versionId) {
+  return jsonRequest(`/api/campaigns/${campaignId}/dm-map-workbench?map_version_id=${versionId}`);
 }
 
 export async function fetchTerrains() {
-    const response = await fetch("/api/terrains");
-    return await response.json();
+  return jsonRequest("/api/terrains");
 }
 
-export async function createMap(width, height, hexSize) {
-    const response = await fetch(`/api/newmap/${width}/${height}/${hexSize}`, {
-        method: "POST"
-    });
-    return await response.json();
+export async function createMap(campaignId, width, height, hexSize, name, versionName, effectiveFromGameMinute) {
+  return jsonRequest(`/api/campaigns/${campaignId}/dm-maps`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name,
+      description: null,
+      version_name: versionName,
+      effective_from_game_minute: effectiveFromGameMinute,
+      width,
+      height,
+      hex_size: hexSize,
+    }),
+  });
 }
 
-export async function paintHexApi(q, r, terrainKey) {
-    const response = await fetch(`/api/hex/${q}/${r}/${terrainKey}`, {
-        method: "POST"
-    });
-    return await response.json();
-}
-
-export async function paintHexesBatchApi(hexes, terrainKey) {
-    const payload = hexes.map(hex => ({
-        q: hex.q,
-        r: hex.r,
-        terrain_key: terrainKey
-    }));
-
-    const response = await fetch("/api/hex/paint", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(payload)
-    });
-    return await response.json();
+function editorPath(suffix) {
+  const { campaignId, mapId, versionId } = state.editor;
+  if (!campaignId || !mapId || !versionId) throw new Error("Aucune version de carte persistée n'est chargée.");
+  return `/api/campaigns/${campaignId}/dm-maps/${mapId}/dm-map-versions/${versionId}/hexes/${suffix}`;
 }
 
 export async function paintHexesBatchRadiusApi(hexes, terrainKey, radius) {
-    const payload = hexes.map(hex => ({
-        q: hex.q,
-        r: hex.r,
-        terrain_key: terrainKey
-    }));
-
-    const response = await fetch(`/api/hex/paintRadius?radius=${radius}`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(payload)
-    });
-    return await response.json();
+  return jsonRequest(editorPath("paint"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ centers: hexes, terrain_key: terrainKey, radius }),
+  });
 }
 
 export async function paintHexesExactApi(hexes) {
-    const response = await fetch("/api/hex/paintExact", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(hexes)
-    });
-    if (!response.ok) throw new Error(`Exact paint failed: ${response.status}`);
-    return await response.json();
+  return jsonRequest(editorPath("exact"), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(hexes),
+  });
 }

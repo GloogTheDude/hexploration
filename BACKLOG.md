@@ -440,9 +440,7 @@ identity impersonation, cross-campaign hiding and filtered player-map output.
 The complete SQLite suite passes (`274 passed`).
 
 The legacy global editor endpoints (`/api/map`, `/api/hex/*`,
-`/api/newmap/*`) remain unchanged: the current frontend still calls them,
-but they have no campaign identity and therefore require a separate cleanup
-decision rather than a fabricated authorization rule.
+`/api/newmap/*`) were identified for the separate MAP-001 ownership cleanup.
 
 ### AUTH-008 — Frontend authentication integration
 
@@ -524,15 +522,18 @@ Result: The primary frontend pages retain cross-area navigation links for the ex
 
 ### MAP-001 — Resolve legacy global editor ownership
 
-Status: `NEEDS_USER_DECISION`
+Status: `NEEDS_POSTGRES_VALIDATION`
 
-Audit result:
+Result:
 
 - The persisted campaign/editor routes are scoped and authorized through `MapVersion → Map → Campaign`; POIs, edges and areas derive ownership through their map version, and player-map access remains separate and filtered.
-- The historical `/api/map`, `/api/hex/*` and `/api/newmap/*` routes are still actively called by `static/js/app.js` and `static/js/api.js`.
-- Those routes mutate a process-global in-memory `Hexmap` and accept no campaign, map or version identifier. Authentication alone would not establish ownership, so adding a generic DM check would not be safe.
+- The frontend editor now creates, loads, paints, updates and clones persistent campaign map versions through the DM workbench routes. It no longer calls the global `/api/map`, `/api/hex/*` or `/api/newmap/*` endpoints.
+- The global in-memory editor routes and their movement integration were removed. The terrain catalog remains available through the dedicated `/api/terrains` route.
+- No schema changes were required. Focused migration tests pass (`40 passed`); the complete SQLite suite and fresh PostgreSQL validation are required before marking this task `DONE`.
 
-Decision required: migrate the legacy editor calls to the existing campaign-scoped persisted editor workflow and then retire/deprecate the global routes (recommended), or explicitly retain them as a development-only tool that is not exposed in a release deployment. No code change was made because the ownership policy for this global scratchpad is not inferable from the current domain model.
+PostgreSQL validation command:
+
+`TEST_DATABASE_URL='postgresql+psycopg://<user>:<password>@localhost:5435/hexploration_test' ./.venv/bin/pytest -q`
 
 ---
 

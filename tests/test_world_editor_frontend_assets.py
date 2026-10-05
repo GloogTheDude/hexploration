@@ -28,7 +28,7 @@ def test_map_editor_can_toggle_persisted_poi_overlay():
     assert 'id="toggle-poi-overlay"' in html
     assert "state.showPoiOverlay" in app
     assert "refreshPoiOverlay" in app
-    assert "/dm-map-workbench?user_id=" in app
+    assert "dm-map-workbench?map_version_id=" in app
     assert "drawPoiOverlay" in renderer
     assert "state.editorPois" in renderer
 

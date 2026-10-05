@@ -6,8 +6,6 @@ from dto.movement_dto import (
     ExpeditionMoveRequest,
     ExpeditionPositionResponse,
     ExpeditionPositionSet,
-    MapSnapshotCreate,
-    MapSnapshotResponse,
     MovementResponse,
     MovementUndoResponse,
 )
@@ -21,11 +19,7 @@ from services.expedition_movement_service import (
     ExpeditionMovementService,
     InvalidMovementError,
 )
-from services.map_persistence_service import (
-    MapPersistenceError,
-    MapPersistenceService,
-)
-from services.authorization import require_campaign_dm, require_expedition_dm
+from services.authorization import require_expedition_dm
 
 
 router = APIRouter(tags=["movement"])
@@ -42,46 +36,9 @@ def _raise_http(exc: Exception) -> None:
         raise HTTPException(status_code=409, detail=str(exc))
     if isinstance(exc, InvalidMovementError):
         raise HTTPException(status_code=422, detail=str(exc))
-    if isinstance(exc, MapPersistenceError):
-        raise HTTPException(status_code=422, detail=str(exc))
     if isinstance(exc, ValueError):
         raise HTTPException(status_code=422, detail=str(exc))
     raise exc
-
-
-@router.post(
-    "/api/campaigns/{campaign_id}/maps/from-editor",
-    response_model=MapSnapshotResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-def persist_current_editor_map(
-    campaign_id: int,
-    data: MapSnapshotCreate,
-    _membership = Depends(require_campaign_dm),
-    db: Session = Depends(get_db),
-) -> MapSnapshotResponse:
-    try:
-        world_map, version, hex_count = (
-            MapPersistenceService(db).snapshot_current_editor_map(
-                campaign_id=campaign_id,
-                name=data.name,
-                description=data.description,
-                version_name=data.version_name,
-                effective_from_game_minute=data.effective_from_game_minute,
-            )
-        )
-
-        return MapSnapshotResponse(
-            map_id=world_map.id,
-            map_version_id=version.id,
-            version=version.version,
-            width=version.width,
-            height=version.height,
-            hex_size=version.hex_size,
-            hex_count=hex_count,
-        )
-    except (NotFoundError, MapPersistenceError, ValueError) as exc:
-        _raise_http(exc)
 
 
 @router.post(

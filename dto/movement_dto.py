@@ -3,20 +3,6 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class MapSnapshotCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=160)
-    description: str | None = None
-    version_name: str | None = Field(default="Initial version", max_length=160)
-    effective_from_game_minute: int = Field(default=0, ge=0)
-
-    @field_validator("name")
-    @classmethod
-    def reject_blank_name(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("must contain non-whitespace characters")
-        return value
-
-
 class MapSnapshotResponse(BaseModel):
     map_id: int
     map_version_id: int

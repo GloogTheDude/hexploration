@@ -48,13 +48,6 @@ class DMEditorMapVersionUpdate(BaseModel):
     effective_from_game_minute: int = Field(ge=0)
 
 
-class DMEditorLoadResponse(BaseModel):
-    map_id: int
-    map_version_id: int
-    version: int
-    hex_count: int
-
-
 class DMEditorMapCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     description: str | None = None
@@ -67,6 +60,29 @@ class DMEditorMapCreate(BaseModel):
         if not value.strip():
             raise ValueError("must contain non-whitespace characters")
         return value
+
+
+class DMPersistentMapCreate(DMEditorMapCreate):
+    width: int = Field(ge=1, le=10_000)
+    height: int = Field(ge=1, le=10_000)
+    hex_size: int = Field(ge=8, le=96)
+
+
+class DMHexPaintCenter(BaseModel):
+    q: int
+    r: int
+
+
+class DMHexPaintRequest(BaseModel):
+    centers: list[DMHexPaintCenter] = Field(min_length=1)
+    terrain_key: str = Field(min_length=1, max_length=80)
+    radius: int = Field(ge=1, le=25)
+
+
+class DMHexPaintExact(BaseModel):
+    q: int
+    r: int
+    terrain_key: str = Field(min_length=1, max_length=80)
 
 
 class DMCampaignSummary(BaseModel):

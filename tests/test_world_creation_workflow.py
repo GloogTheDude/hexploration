@@ -3,27 +3,22 @@ from pydantic import ValidationError
 from sqlalchemy import select
 
 from db.models import MapHex, MapVersion, WorldMap
-from dto.movement_dto import MapSnapshotCreate
-from models.hexmap import Hexmap
+from dto.dm_dashboard_dto import DMPersistentMapCreate
 from services.map_persistence_service import MapPersistenceService
 from services.errors import NotFoundError
 
 
 def test_world_creation_persists_map_and_initial_version(db, campaign):
-    import routes.map_routes as map_routes
-
-    previous_map = map_routes.hexmap
-    try:
-        map_routes.hexmap = Hexmap(2, 3, 32)
-        world_map, version, hex_count = MapPersistenceService(db).snapshot_current_editor_map(
-            campaign_id=campaign.id,
-            name="  First World  ",
-            description="The campaign world",
-            version_name="Initial",
-            effective_from_game_minute=0,
-        )
-    finally:
-        map_routes.hexmap = previous_map
+    world_map, version, hex_count = MapPersistenceService(db).create_map(
+        campaign_id=campaign.id,
+        name="  First World  ",
+        description="The campaign world",
+        version_name="Initial",
+        effective_from_game_minute=0,
+        width=2,
+        height=3,
+        hex_size=32,
+    )
 
     assert world_map.campaign_id == campaign.id
     assert world_map.name == "First World"
@@ -39,30 +34,34 @@ def test_world_creation_persists_map_and_initial_version(db, campaign):
 
 
 def test_world_creation_rejects_unknown_campaign(db):
-    import routes.map_routes as map_routes
-
     with pytest.raises(NotFoundError, match="Campaign not found"):
-        MapPersistenceService(db).snapshot_current_editor_map(
+        MapPersistenceService(db).create_map(
             campaign_id=999999,
             name="World",
             description=None,
             version_name="Initial",
             effective_from_game_minute=0,
+            width=2,
+            height=2,
+            hex_size=32,
         )
 
 
 def test_world_creation_rejects_negative_effective_time(db, campaign):
     with pytest.raises(ValueError, match="must be >= 0"):
-        MapPersistenceService(db).snapshot_current_editor_map(
+        MapPersistenceService(db).create_map(
             campaign_id=campaign.id,
             name="World",
             description=None,
             version_name="Initial",
             effective_from_game_minute=-1,
+            width=2,
+            height=2,
+            hex_size=32,
         )
 
 
-@pytest.mark.parametrize("dto", [MapSnapshotCreate,])
+@pytest.mark.parametrize("dto", [DMPersistentMapCreate,])
 def test_world_creation_rejects_whitespace_only_name(dto):
     with pytest.raises(ValidationError):
-        dto(name="   ")
+        dto(name="   ", width=2, height=2, hex_size=32)

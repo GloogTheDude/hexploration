@@ -1,5 +1,5 @@
 import { state } from "./state.js?v=320";
-import { fetchMap, fetchTerrains, createMap } from "./api.js?v=320";
+import { fetchPersistentMap, fetchTerrains, createMap } from "./api.js?v=320";
 import { drawMap, requestMapDraw, resizeCanvasToDisplaySize } from "./renderer.js?v=320";
 import { createTerrainButtons } from "./ui.js?v=320";
 import { authReady, authFetch } from './auth.js';
@@ -28,7 +28,6 @@ const canvasHint = $("#canvas-hint");
 const poiOverlayBtn = $("#toggle-poi-overlay");
 
 const params = new URL(location.href).searchParams;
-const editorUserId = Number(params.get("user"));
 const editorCampaignId = Number(params.get("campaign"));
 let editorMapId = Number(params.get("map")) || null;
 let editorVersionId = Number(params.get("version")) || null;
@@ -68,14 +67,49 @@ function updateMapSummary() {
 
 async function refreshPoiOverlay() {
   state.editorPois = [];
-  if (!editorCampaignId || !editorUserId || !editorVersionId) { redraw(); return; }
+  if (!editorCampaignId || !editorVersionId) { redraw(); return; }
   try {
-    const workbench = await fetchJson(`/api/campaigns/${editorCampaignId}/dm-map-workbench?user_id=${editorUserId}&map_version_id=${editorVersionId}`);
+    const workbench = await fetchJson(`/api/campaigns/${editorCampaignId}/dm-map-workbench?map_version_id=${editorVersionId}`);
     state.editorPois = workbench.pois || [];
   } catch (_) {
     state.editorPois = [];
   }
   redraw();
+}
+
+function mapFromWorkbench(workbench) {
+  const hexes = {};
+  for (const hex of workbench.hexes || []) {
+    const terrain = state.terrains[hex.terrain_key];
+    if (terrain) {
+      hexes[`${hex.q},${hex.r}`] = {
+        q: hex.q,
+        r: hex.r,
+        terrain: { ...terrain, elevation: hex.elevation, visibility_score: hex.visibility_score, travel_cost: hex.travel_cost },
+        pois: [],
+      };
+    }
+  }
+  return {
+    width: workbench.width,
+    height: workbench.height,
+    hex_size: workbench.hex_size,
+    layout: "even-q-rect",
+    sparse: Boolean(workbench.default_terrain_key),
+    default_terrain_key: workbench.default_terrain_key || "SEA",
+    hexes,
+  };
+}
+
+async function loadWorkbenchIntoCanvas(versionId) {
+  const workbench = await fetchPersistentMap(editorCampaignId, versionId);
+  state.map = mapFromWorkbench(workbench);
+  state.editor = { campaignId: editorCampaignId, mapId: workbench.map_id, versionId: workbench.map_version_id };
+  editorMapId = workbench.map_id;
+  editorVersionId = workbench.map_version_id;
+  loadedVersionNumber = Number(workbench.version);
+  clearPaintHistory();
+  return workbench;
 }
 
 function updatePoiOverlayButton() {
@@ -200,10 +234,9 @@ function updateUrlContext() {
   history.replaceState(null, "", url);
   if (editorWorldLink) {
     const world = new URL("/world.html", location.origin);
-    if (editorUserId) world.searchParams.set("user", editorUserId);
     if (editorCampaignId) world.searchParams.set("campaign", editorCampaignId);
     if (editorVersionId) world.searchParams.set("version", editorVersionId);
-    editorWorldLink.href = world.pathname + world.search;
+  editorWorldLink.href = world.pathname + world.search;
   }
 }
 
@@ -216,8 +249,8 @@ async function fetchJson(url, options = {}) {
 }
 
 async function refreshPersistedVersionOptions(selectVersionId = editorVersionId) {
-  if (!editorCampaignId || !editorUserId) return;
-  const dashboard = await fetchJson(`/api/campaigns/${editorCampaignId}/dm-dashboard?user_id=${editorUserId}`);
+  if (!editorCampaignId) return;
+  const dashboard = await fetchJson(`/api/campaigns/${editorCampaignId}/dm-dashboard`);
   persistedVersionSelect.innerHTML = '<option value="">— Choisir une carte/version —</option>';
   for (const map of dashboard.maps) {
     for (const version of map.versions) {
@@ -245,12 +278,7 @@ async function loadPersistedVersion(versionId = null) {
   const selectedVersionId = Number(selected.value);
   setMessage("Chargement de la version persistée…");
   try {
-    const body = await fetchJson(`/api/campaigns/${editorCampaignId}/dm-map-versions/${selectedVersionId}/load-editor?user_id=${editorUserId}`, { method: "POST" });
-    state.map = await fetchMap();
-    clearPaintHistory();
-    editorMapId = mapId;
-    editorVersionId = selectedVersionId;
-    loadedVersionNumber = Number(body.version);
+    const body = await loadWorkbenchIntoCanvas(selectedVersionId);
     persistMapName.value = selected.dataset.mapName || `Map #${mapId}`;
     persistVersionName.value = selected.dataset.versionName || `Version ${body.version}`;
     persistVersionName.dataset.auto = "0";
@@ -265,9 +293,9 @@ async function loadPersistedVersion(versionId = null) {
 }
 
 async function initCampaignContext() {
-  if (!editorCampaignId || !editorUserId) return;
+  if (!editorCampaignId) return;
   campaignSavePanel.classList.remove("hidden");
-  editorDmLink.href = `/dm.html?user=${editorUserId}&campaign=${editorCampaignId}`;
+  editorDmLink.href = `/dm.html?campaign=${editorCampaignId}`;
   updateUrlContext();
   try {
     const campaign = await fetchJson(`/api/campaigns/${editorCampaignId}`);
@@ -287,12 +315,22 @@ async function createNewMap(event) {
     return setMessage("Dimensions invalides : maximum 10 000×10 000 hex.", true);
   }
   const createBtn = $("#confirm-new-map-btn");
+  let body;
   createBtn.disabled = true;
   createBtn.textContent = "Création…";
   try {
     await flushPendingPaint();
-    state.map = await createMap(width, height, hexSize);
-    clearPaintHistory();
+    body = await createMap(
+      editorCampaignId,
+      width,
+      height,
+      hexSize,
+      persistMapName.value.trim() || "Carte principale",
+      persistVersionName.value.trim() || "Initial version",
+      gameMinuteFromDateInputs("persist-time"),
+    );
+    await refreshPersistedVersionOptions(body.map_version_id);
+    await loadWorkbenchIntoCanvas(body.map_version_id);
   } catch (error) {
     setMessage(error.message, true);
     return;
@@ -300,8 +338,8 @@ async function createNewMap(event) {
     createBtn.disabled = false;
     createBtn.textContent = "Créer le brouillon";
   }
-  editorMapId = null;
-  editorVersionId = null;
+  editorMapId = body.map_id;
+  editorVersionId = body.map_version_id;
   state.editorPois = [];
   loadedVersionNumber = null;
   persistMapName.disabled = false;
@@ -309,25 +347,25 @@ async function createNewMap(event) {
   persistVersionName.value = "Initial version";
   persistVersionName.dataset.auto = "0";
   setDateInputs("persist-time", 0);
-  campaignContextLabel.textContent = `Campagne #${editorCampaignId} · nouveau brouillon`;
+  campaignContextLabel.textContent = `Campagne #${editorCampaignId} · carte #${body.map_id}`;
   updateUrlContext();
   setSaveModeUI();
   modal.classList.add("hidden");
   resetViewOneToOne();
-  setMessage("Nouveau brouillon créé. Il n'est pas encore persisté.");
+  setMessage("Carte persistée créée. Les peintures sont enregistrées automatiquement.");
 }
 
 async function reloadDraft() {
   try {
     await flushPendingPaint();
-    state.map = await fetchMap();
-    clearPaintHistory();
+    if (!editorVersionId) return setMessage("Aucune version persistée n'est chargée.", true);
+    await loadWorkbenchIntoCanvas(editorVersionId);
     redraw();
   } catch (error) { setMessage(error.message, true); }
 }
 
 async function persistEditorMap() {
-  if (!editorUserId || !editorCampaignId || !state.map?.hexes) return;
+  if (!editorCampaignId || !state.map?.hexes) return;
   const mode = editorVersionId ? (document.querySelector('input[name="save-mode"]:checked')?.value || "update") : "create";
   setMessage("Synchronisation du pinceau…");
   try {
@@ -335,7 +373,7 @@ async function persistEditorMap() {
     setMessage("Sauvegarde…");
     let body;
     if (mode === "update") {
-      body = await fetchJson(`/api/campaigns/${editorCampaignId}/dm-maps/${editorMapId}/versions/${editorVersionId}/from-editor?user_id=${editorUserId}`, {
+      body = await fetchJson(`/api/campaigns/${editorCampaignId}/dm-maps/${editorMapId}/versions/${editorVersionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -346,7 +384,7 @@ async function persistEditorMap() {
       });
       setMessage(`Carte #${body.map_id} · v${body.version} mise à jour · ${body.hex_count} hex.`);
     } else if (mode === "new-version") {
-      body = await fetchJson(`/api/campaigns/${editorCampaignId}/dm-maps/${editorMapId}/versions/from-editor?user_id=${editorUserId}`, {
+      body = await fetchJson(`/api/campaigns/${editorCampaignId}/dm-maps/${editorMapId}/versions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -357,24 +395,11 @@ async function persistEditorMap() {
       });
       editorVersionId = body.map_version_id;
       loadedVersionNumber = body.version;
+      await loadWorkbenchIntoCanvas(editorVersionId);
       updateUrlContext();
       setMessage(`Nouvelle version créée : carte #${body.map_id} · v${body.version} · ${body.hex_count} hex.`);
     } else {
-      body = await fetchJson(`/api/campaigns/${editorCampaignId}/dm-maps/from-editor?user_id=${editorUserId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: persistMapName.value.trim(),
-          description: null,
-          version_name: persistVersionName.value.trim() || null,
-          effective_from_game_minute: gameMinuteFromDateInputs("persist-time"),
-        }),
-      });
-      editorMapId = body.map_id;
-      editorVersionId = body.map_version_id;
-      loadedVersionNumber = body.version;
-      updateUrlContext();
-      setMessage(`Carte #${body.map_id} · v${body.version} créée · ${body.hex_count} hex.`);
+      throw new Error("Crée d'abord une carte persistée avec le bouton Nouvelle.");
     }
     await refreshPersistedVersionOptions(editorVersionId);
     const selected = persistedVersionSelect.selectedOptions[0];
@@ -562,12 +587,12 @@ window.addEventListener("resize", redraw);
     await authReady;
     state.terrains = await fetchTerrains();
     createTerrainButtons();
-    state.map = await fetchMap();
     setBrush(false);
     setSaveModeUI();
     updatePoiOverlayButton();
     await initCampaignContext();
-    if (!editorVersionId && state.map?.hexes) resetViewOneToOne();
+    if (editorVersionId) await loadWorkbenchIntoCanvas(editorVersionId);
+    if (state.map?.hexes) resetViewOneToOne();
     else redraw();
   } catch (error) { setMessage(error.message, true); }
 })();

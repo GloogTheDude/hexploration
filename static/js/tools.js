@@ -70,6 +70,26 @@ function terrainKeyForTile(tile) {
   return state.map.default_terrain_key || "SEA";
 }
 
+function applyPersistentWorkbench(workbench) {
+  state.map.width = workbench.width;
+  state.map.height = workbench.height;
+  state.map.hex_size = workbench.hex_size;
+  state.map.layout = "even-q-rect";
+  state.map.sparse = Boolean(workbench.default_terrain_key);
+  state.map.default_terrain_key = workbench.default_terrain_key || "SEA";
+  state.map.hexes = {};
+  for (const row of workbench.hexes || []) {
+    const terrain = state.terrains[row.terrain_key];
+    if (!terrain) continue;
+    state.map.hexes[`${row.q},${row.r}`] = {
+      q: row.q,
+      r: row.r,
+      terrain: { ...terrain, elevation: row.elevation, visibility_score: row.visibility_score, travel_cost: row.travel_cost },
+      pois: [],
+    };
+  }
+}
+
 export function beginPaintStroke() {
   activeStrokeBefore = new Map();
 }
@@ -100,7 +120,8 @@ async function applyHistorySnapshot(snapshot) {
     else delete state.map.hexes[key];
     payload.push({ q: item.q, r: item.r, terrain_key: terrainKeyForTile(item.tile) });
   }
-  await paintHexesExactApi(payload);
+  const data = await paintHexesExactApi(payload);
+  applyPersistentWorkbench(data);
 }
 
 export async function undoPaint() {
@@ -212,11 +233,9 @@ export async function flushPendingPaint() {
   const radius = state.brushRadius;
   inflight = inflight.then(async () => {
     const data = await paintHexesBatchRadiusApi(centers, terrainKey, radius);
-    // Server remains authoritative. Applying the compact response also handles
-    // edge-of-map radius clipping exactly like the backend.
-    for (const modified of data.modified_hexes || []) {
-      state.map.hexes[`${modified.q},${modified.r}`] = modified;
-    }
+    // Server remains authoritative. The response is the complete sparse
+    // workbench, so undo/redo and edge clipping use the persisted result.
+    applyPersistentWorkbench(data);
   });
   await inflight;
   // New paint events may have arrived while the request was in flight.

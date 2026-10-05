@@ -192,50 +192,82 @@ class DMDashboardService:
         )
         return CharacterService(self.db).create(campaign_id, payload)
 
-    def snapshot_editor_map(self, campaign_id: int, user_id: int, data):
+    def create_persistent_map(self, campaign_id: int, user_id: int, data):
         from services.map_persistence_service import MapPersistenceService
 
         self._require_dm(campaign_id, user_id)
-        return MapPersistenceService(self.db).snapshot_current_editor_map(
+        return MapPersistenceService(self.db).create_map(
             campaign_id=campaign_id,
             name=data.name,
             description=data.description,
             version_name=data.version_name,
             effective_from_game_minute=data.effective_from_game_minute,
+            width=data.width,
+            height=data.height,
+            hex_size=data.hex_size,
         )
 
-    def load_map_version_into_editor(self, campaign_id: int, user_id: int, map_version_id: int):
+    def paint_persistent_map(self, campaign_id: int, user_id: int, map_id: int, map_version_id: int, data):
         from services.map_persistence_service import MapPersistenceService
-        self._require_dm(campaign_id, user_id)
-        world_map, version = self._require_map_version(campaign_id, map_version_id)
-        loaded_map, loaded_version, count = MapPersistenceService(self.db).load_version_into_editor(version.id)
-        return loaded_map, loaded_version, count
 
-    def snapshot_new_map_version(self, campaign_id: int, user_id: int, map_id: int, data):
-        from services.map_persistence_service import MapPersistenceService
         self._require_dm(campaign_id, user_id)
-        world_map = self.db.get(WorldMap, map_id)
-        if world_map is None:
-            raise NotFoundError("Map not found")
-        if world_map.campaign_id != campaign_id:
-            raise ForbiddenOperationError("Map does not belong to this campaign")
-        return MapPersistenceService(self.db).snapshot_new_version_from_editor(
+        world_map, _ = self._require_map_version(campaign_id, map_version_id)
+        if world_map.id != map_id:
+            raise NotFoundError("Map version not found")
+        return MapPersistenceService(self.db).paint_hexes(
+            campaign_id=campaign_id,
             map_id=map_id,
-            parent_version_id=data.parent_version_id,
-            version_name=data.version_name,
-            effective_from_game_minute=data.effective_from_game_minute,
+            map_version_id=map_version_id,
+            centers=[(center.q, center.r) for center in data.centers],
+            terrain_key=data.terrain_key.strip().upper(),
+            radius=data.radius,
         )
 
-    def update_map_version_from_editor(self, campaign_id: int, user_id: int, map_id: int, map_version_id: int, data):
+    def paint_persistent_map_exact(self, campaign_id: int, user_id: int, map_id: int, map_version_id: int, data):
         from services.map_persistence_service import MapPersistenceService
+
+        self._require_dm(campaign_id, user_id)
+        world_map, _ = self._require_map_version(campaign_id, map_version_id)
+        if world_map.id != map_id:
+            raise NotFoundError("Map version not found")
+        service = MapPersistenceService(self.db)
+        rows = []
+        for item in data:
+            rows = service.paint_hexes(
+                campaign_id=campaign_id,
+                map_id=map_id,
+                map_version_id=map_version_id,
+                centers=[(item.q, item.r)],
+                terrain_key=item.terrain_key.strip().upper(),
+                radius=1,
+            )
+        return rows
+
+    def update_persistent_map_metadata(self, campaign_id: int, user_id: int, map_id: int, map_version_id: int, data):
+        from services.map_persistence_service import MapPersistenceService
+
         self._require_dm(campaign_id, user_id)
         world_map, version = self._require_map_version(campaign_id, map_version_id)
         if world_map.id != map_id:
             raise NotFoundError("Map version not found")
-        return MapPersistenceService(self.db).update_version_from_editor(
+        return MapPersistenceService(self.db).update_version_metadata(
             map_id=map_id,
-            map_version_id=version.id,
+            map_version_id=map_version_id,
             map_name=data.map_name,
+            version_name=data.version_name,
+            effective_from_game_minute=data.effective_from_game_minute,
+        )
+
+    def clone_persistent_map_version(self, campaign_id: int, user_id: int, map_id: int, data):
+        from services.map_persistence_service import MapPersistenceService
+
+        self._require_dm(campaign_id, user_id)
+        world_map, _ = self._require_map_version(campaign_id, data.parent_version_id)
+        if world_map.id != map_id:
+            raise NotFoundError("Map version not found")
+        return MapPersistenceService(self.db).clone_map_version(
+            map_id=map_id,
+            parent_version_id=data.parent_version_id,
             version_name=data.version_name,
             effective_from_game_minute=data.effective_from_game_minute,
         )

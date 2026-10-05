@@ -25,10 +25,11 @@ from dto.dm_dashboard_dto import (
     DMMemberAdd,
     DMMemberSummary,
     DMCharacterCreate,
-    DMEditorMapCreate,
     DMEditorMapVersionCreate,
     DMEditorMapVersionUpdate,
-    DMEditorLoadResponse,
+    DMPersistentMapCreate,
+    DMHexPaintRequest,
+    DMHexPaintExact,
 )
 from dto.expedition_dto import ExpeditionResponse
 from dto.character_dto import CharacterResponse
@@ -286,113 +287,47 @@ def dm_create_character(
         _raise_http(exc)
 
 
-@router.post(
-    "/api/campaigns/{campaign_id}/dm-maps/from-editor",
-    response_model=MapSnapshotResponse,
-    status_code=201,
-)
-def dm_snapshot_editor_map(
-    campaign_id: int,
-    data: DMEditorMapCreate,
-    user_id: int = Depends(_current_user_id),
-    db: Session = Depends(get_db),
-):
+@router.post("/api/campaigns/{campaign_id}/dm-maps", response_model=MapSnapshotResponse, status_code=201)
+def create_persistent_map(campaign_id: int, data: DMPersistentMapCreate, user_id: int = Depends(_current_user_id), db: Session = Depends(get_db)):
     try:
-        world_map, version, hex_count = DMDashboardService(db).snapshot_editor_map(
-            campaign_id, user_id, data
-        )
-        return MapSnapshotResponse(
-            map_id=world_map.id,
-            map_version_id=version.id,
-            version=version.version,
-            width=version.width,
-            height=version.height,
-            hex_size=version.hex_size,
-            hex_count=hex_count,
-        )
+        world_map, version, hex_count = DMDashboardService(db).create_persistent_map(campaign_id, user_id, data)
+        return MapSnapshotResponse(map_id=world_map.id, map_version_id=version.id, version=version.version, width=version.width, height=version.height, hex_size=version.hex_size, hex_count=hex_count)
     except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError, MapPersistenceError) as exc:
         _raise_http(exc)
 
 
-
-@router.post(
-    "/api/campaigns/{campaign_id}/dm-map-versions/{map_version_id}/load-editor",
-    response_model=DMEditorLoadResponse,
-)
-def dm_load_map_version_into_editor(
-    campaign_id: int,
-    map_version_id: int,
-    user_id: int = Depends(_current_user_id),
-    db: Session = Depends(get_db),
-):
+@router.post("/api/campaigns/{campaign_id}/dm-maps/{map_id}/dm-map-versions/{map_version_id}/hexes/paint", response_model=DMMapWorkbenchResponse)
+def paint_persistent_map(campaign_id: int, map_id: int, map_version_id: int, data: DMHexPaintRequest, user_id: int = Depends(_current_user_id), db: Session = Depends(get_db)):
     try:
-        world_map, version, hex_count = DMDashboardService(db).load_map_version_into_editor(
-            campaign_id, user_id, map_version_id
-        )
-        return DMEditorLoadResponse(
-            map_id=world_map.id,
-            map_version_id=version.id,
-            version=version.version,
-            hex_count=hex_count,
-        )
+        DMDashboardService(db).paint_persistent_map(campaign_id, user_id, map_id, map_version_id, data)
+        return DMDashboardService(db).get_map_workbench(campaign_id, user_id, map_version_id)
     except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError, MapPersistenceError) as exc:
         _raise_http(exc)
 
 
-@router.post(
-    "/api/campaigns/{campaign_id}/dm-maps/{map_id}/versions/from-editor",
-    response_model=MapSnapshotResponse,
-    status_code=201,
-)
-def dm_snapshot_new_map_version(
-    campaign_id: int,
-    map_id: int,
-    data: DMEditorMapVersionCreate,
-    user_id: int = Depends(_current_user_id),
-    db: Session = Depends(get_db),
-):
+@router.put("/api/campaigns/{campaign_id}/dm-maps/{map_id}/dm-map-versions/{map_version_id}/hexes/exact", response_model=DMMapWorkbenchResponse)
+def paint_persistent_map_exact(campaign_id: int, map_id: int, map_version_id: int, data: list[DMHexPaintExact], user_id: int = Depends(_current_user_id), db: Session = Depends(get_db)):
     try:
-        world_map, version, hex_count, _poi_count, _edge_count = DMDashboardService(db).snapshot_new_map_version(
-            campaign_id, user_id, map_id, data
-        )
-        return MapSnapshotResponse(
-            map_id=world_map.id,
-            map_version_id=version.id,
-            version=version.version,
-            width=version.width,
-            height=version.height,
-            hex_size=version.hex_size,
-            hex_count=hex_count,
-        )
+        DMDashboardService(db).paint_persistent_map_exact(campaign_id, user_id, map_id, map_version_id, data)
+        return DMDashboardService(db).get_map_workbench(campaign_id, user_id, map_version_id)
     except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError, MapPersistenceError) as exc:
         _raise_http(exc)
 
 
-@router.patch(
-    "/api/campaigns/{campaign_id}/dm-maps/{map_id}/versions/{map_version_id}/from-editor",
-    response_model=MapSnapshotResponse,
-)
-def dm_update_map_version_from_editor(
-    campaign_id: int,
-    map_id: int,
-    map_version_id: int,
-    data: DMEditorMapVersionUpdate,
-    user_id: int = Depends(_current_user_id),
-    db: Session = Depends(get_db),
-):
+@router.patch("/api/campaigns/{campaign_id}/dm-maps/{map_id}/versions/{map_version_id}", response_model=MapSnapshotResponse)
+def update_persistent_map_version(campaign_id: int, map_id: int, map_version_id: int, data: DMEditorMapVersionUpdate, user_id: int = Depends(_current_user_id), db: Session = Depends(get_db)):
     try:
-        world_map, version, hex_count = DMDashboardService(db).update_map_version_from_editor(
-            campaign_id, user_id, map_id, map_version_id, data
-        )
-        return MapSnapshotResponse(
-            map_id=world_map.id,
-            map_version_id=version.id,
-            version=version.version,
-            width=version.width,
-            height=version.height,
-            hex_size=version.hex_size,
-            hex_count=hex_count,
-        )
+        world_map, version, hex_count = DMDashboardService(db).update_persistent_map_metadata(campaign_id, user_id, map_id, map_version_id, data)
+        return MapSnapshotResponse(map_id=world_map.id, map_version_id=version.id, version=version.version, width=version.width, height=version.height, hex_size=version.hex_size, hex_count=hex_count)
+    except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError, MapPersistenceError) as exc:
+        _raise_http(exc)
+
+
+@router.post("/api/campaigns/{campaign_id}/dm-maps/{map_id}/versions", response_model=MapSnapshotResponse, status_code=201)
+def clone_persistent_map_version(campaign_id: int, map_id: int, data: DMEditorMapVersionCreate, user_id: int = Depends(_current_user_id), db: Session = Depends(get_db)):
+    try:
+        world_map, version, hex_count, _poi_count, _edge_count = DMDashboardService(db).clone_persistent_map_version(campaign_id, user_id, map_id, data)
+        return MapSnapshotResponse(map_id=world_map.id, map_version_id=version.id, version=version.version, width=version.width, height=version.height, hex_size=version.hex_size, hex_count=hex_count)
     except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError, MapPersistenceError) as exc:
         _raise_http(exc)
 

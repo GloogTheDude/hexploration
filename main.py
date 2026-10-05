@@ -4,7 +4,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.gzip import GZipMiddleware
 
-from routes.map_routes import router as map_router
+from routes.terrain_routes import router as terrain_router
 from routes.health_routes import router as health_router
 from routes.user_routes import router as user_router
 from routes.campaign_routes import router as campaign_router
@@ -44,7 +44,7 @@ async def csrf_middleware(request: Request, call_next):
     return await call_next(request)
 
 app.include_router(auth_router)
-app.include_router(map_router)
+app.include_router(terrain_router)
 app.include_router(health_router)
 app.include_router(user_router)
 app.include_router(campaign_router)
