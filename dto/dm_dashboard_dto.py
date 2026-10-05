@@ -217,6 +217,16 @@ class DMMapHexWorkbench(BaseModel):
     extra_data: dict[str, Any]
 
 
+class DMMapHexRemoved(BaseModel):
+    q: int
+    r: int
+
+
+class DMMapHexPaintDelta(BaseModel):
+    upserted: list[DMMapHexWorkbench]
+    removed: list[DMMapHexRemoved]
+
+
 class DMPOIWorkbench(BaseModel):
     id: int
     feature_id: int

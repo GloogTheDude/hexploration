@@ -214,7 +214,7 @@ class DMDashboardService:
         world_map, _ = self._require_map_version(campaign_id, map_version_id)
         if world_map.id != map_id:
             raise NotFoundError("Map version not found")
-        return MapPersistenceService(self.db).paint_hexes(
+        return MapPersistenceService(self.db).paint_hexes_delta(
             campaign_id=campaign_id,
             map_id=map_id,
             map_version_id=map_version_id,
@@ -230,18 +230,12 @@ class DMDashboardService:
         world_map, _ = self._require_map_version(campaign_id, map_version_id)
         if world_map.id != map_id:
             raise NotFoundError("Map version not found")
-        service = MapPersistenceService(self.db)
-        rows = []
-        for item in data:
-            rows = service.paint_hexes(
-                campaign_id=campaign_id,
-                map_id=map_id,
-                map_version_id=map_version_id,
-                centers=[(item.q, item.r)],
-                terrain_key=item.terrain_key.strip().upper(),
-                radius=1,
-            )
-        return rows
+        return MapPersistenceService(self.db).paint_hexes_exact_delta(
+            campaign_id=campaign_id,
+            map_id=map_id,
+            map_version_id=map_version_id,
+            changes=[(item.q, item.r, item.terrain_key) for item in data],
+        )
 
     def update_persistent_map_metadata(self, campaign_id: int, user_id: int, map_id: int, map_version_id: int, data):
         from services.map_persistence_service import MapPersistenceService

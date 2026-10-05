@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from db.models import (
@@ -159,27 +159,10 @@ class MapPersistenceService:
                         if self._coord_in_version(version, *candidate):
                             coords.add(candidate)
 
-        existing = {
-            (row.q, row.r): row
-            for row in self.db.scalars(
-                select(MapHex).where(MapHex.map_version_id == version.id)
-            )
-            if (row.q, row.r) in coords
-        }
-        for q, r in coords:
-            row = existing.get((q, r))
-            if terrain_key == version.default_terrain_key:
-                if row is not None:
-                    self.db.delete(row)
-                continue
-            payload = self._terrain_payload(version.id, q, r, terrain_key)
-            if row is None:
-                self.db.add(MapHex(**payload))
-            else:
-                for key, value in payload.items():
-                    if key != "map_version_id":
-                        setattr(row, key, value)
-        self.db.commit()
+        delta = self._apply_paint_changes(
+            version,
+            {coord: terrain_key for coord in coords},
+        )
         return list(
             self.db.scalars(
                 select(MapHex)
@@ -187,6 +170,148 @@ class MapPersistenceService:
                 .order_by(MapHex.q, MapHex.r)
             )
         )
+
+    def paint_hexes_delta(
+        self,
+        *,
+        campaign_id: int,
+        map_id: int,
+        map_version_id: int,
+        centers: list[tuple[int, int]],
+        terrain_key: str,
+        radius: int,
+    ) -> dict:
+        """Apply one brush operation and return only changed cells."""
+        world_map, version = self._map_version(map_id, map_version_id)
+        if world_map.campaign_id != campaign_id:
+            raise ConflictError("Map does not belong to this campaign")
+        if radius < 1 or radius > 25:
+            raise ValueError("Brush radius must be between 1 and 25")
+        terrain_key = terrain_key.strip().upper()
+        if terrain_key not in BASE_TERRAINS:
+            raise ValueError(f"Unknown terrain: {terrain_key}")
+        self._assert_mutable(version)
+
+        coords: set[tuple[int, int]] = set()
+        distance = radius - 1
+        for q, r in centers:
+            for dq in range(-distance, distance + 1):
+                for dr in range(-distance, distance + 1):
+                    if (abs(dq) + abs(dr) + abs(dq + dr)) // 2 <= distance:
+                        candidate = (q + dq, r + dr)
+                        if self._coord_in_version(version, *candidate):
+                            coords.add(candidate)
+        return self._apply_paint_changes(version, {coord: terrain_key for coord in coords})
+
+    def paint_hexes_exact_delta(
+        self,
+        *,
+        campaign_id: int,
+        map_id: int,
+        map_version_id: int,
+        changes: list[tuple[int, int, str]],
+    ) -> dict:
+        """Apply a deduplicated exact batch in one transaction."""
+        world_map, version = self._map_version(map_id, map_version_id)
+        if world_map.campaign_id != campaign_id:
+            raise ConflictError("Map does not belong to this campaign")
+        self._assert_mutable(version)
+
+        normalized: dict[tuple[int, int], str] = {}
+        for q, r, terrain_key in changes:
+            terrain_key = terrain_key.strip().upper()
+            if terrain_key not in BASE_TERRAINS:
+                raise ValueError(f"Unknown terrain: {terrain_key}")
+            if not self._coord_in_version(version, q, r):
+                raise ValueError(f"Coordinate ({q}, {r}) is outside the map")
+            normalized[(q, r)] = terrain_key
+        return self._apply_paint_changes(version, normalized)
+
+    def _apply_paint_changes(
+        self,
+        version: MapVersion,
+        changes: dict[tuple[int, int], str],
+    ) -> dict:
+        if not changes:
+            return {"upserted": [], "removed": []}
+
+        predicates = [
+            and_(MapHex.q == q, MapHex.r == r)
+            for q, r in changes
+        ]
+        existing = {
+            (row.q, row.r): row
+            for row in self.db.scalars(
+                select(MapHex).where(
+                    MapHex.map_version_id == version.id,
+                    or_(*predicates),
+                )
+            )
+        }
+        poi_hex_ids = set()
+        existing_ids = [row.id for row in existing.values()]
+        if existing_ids:
+            poi_hex_ids = set(
+                self.db.scalars(
+                    select(PointOfInterest.hex_id).where(PointOfInterest.hex_id.in_(existing_ids))
+                )
+            )
+        upserted: list[MapHex] = []
+        removed: list[dict[str, int]] = []
+        try:
+            for (q, r), terrain_key in changes.items():
+                row = existing.get((q, r))
+                if terrain_key == version.default_terrain_key and row is None:
+                    # The default terrain is implicit in a sparse version.
+                    continue
+                if terrain_key == version.default_terrain_key and row is not None:
+                    # POIs reference MapHex directly. Preserve a support row
+                    # when deleting it would cascade a persistent POI.
+                    has_poi = row.id in poi_hex_ids
+                    if has_poi:
+                        payload = self._terrain_payload(version.id, q, r, terrain_key)
+                        for key, value in payload.items():
+                            if key != "map_version_id":
+                                setattr(row, key, value)
+                        upserted.append(row)
+                    else:
+                        self.db.delete(row)
+                        removed.append({"q": q, "r": r})
+                    continue
+
+                payload = self._terrain_payload(version.id, q, r, terrain_key)
+                if row is None:
+                    row = MapHex(**payload)
+                    self.db.add(row)
+                else:
+                    for key, value in payload.items():
+                        if key != "map_version_id":
+                            setattr(row, key, value)
+                upserted.append(row)
+
+            self.db.flush()
+            result = {
+                "upserted": [self._paint_row_payload(row) for row in upserted],
+                "removed": removed,
+            }
+            self.db.commit()
+            return result
+        except Exception:
+            self.db.rollback()
+            raise
+
+    @staticmethod
+    def _paint_row_payload(row: MapHex) -> dict:
+        return {
+            "id": row.id,
+            "q": row.q,
+            "r": row.r,
+            "terrain_key": row.terrain_key,
+            "elevation": row.elevation,
+            "visibility_score": row.visibility_score,
+            "travel_cost": row.travel_cost,
+            "extra_data": dict(row.extra_data or {}),
+        }
 
     def update_version_metadata(
         self,

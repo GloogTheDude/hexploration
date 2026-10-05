@@ -5,6 +5,7 @@ let userId = 0;
 const campaignId = Number(params.get('campaign'));
 let versionId = Number(params.get('version')) || null;
 let workbench = null, dashboard = null;
+let hexByCoord = new Map();
 let selectedHexes = [], selectedPoiId = null, selectedEdgeId = null, selectedEdgeIds = [], selectedAreaId = null;
 let activeTool = 'select', spaceDown = false, undoStack = [], redoStack = [], editorDirty = false, worldMinute = 0;
 let poiTemporalStates = new Map();
@@ -44,14 +45,15 @@ function setDatePrefix(prefix,total){const p=datePartsFromGameMinute(total);for(
 function formatGameDate(total){const p=datePartsFromGameMinute(total);return `A${p.year} · M${p.month} · J${p.day} · ${String(p.hour).padStart(2,'0')}:${String(p.minute).padStart(2,'0')}`}
 function syncHiddenMinute(prefix,hidden){const value=gameMinuteFromDatePrefix(prefix);hidden.value=String(value);return value}
 function configurePoiEventFields(setDefaults=false){const type=ui.poiEventType.value;ui.poiEventStateRow.classList.toggle('hidden',type!=='POI_STATE_CHANGED');if(setDefaults){if(type==='POI_CREATED'||type==='POI_REBUILT')ui.poiEventVisibility.value='true';else if(type==='POI_DESTROYED')ui.poiEventVisibility.value='false';else if(type==='POI_VISIBILITY_CHANGED'&&ui.poiEventVisibility.value==='unchanged')ui.poiEventVisibility.value='false'}}
-async function loadPoiTemporalStates(){poiTemporalStates=new Map();if(!workbench)return;const rows=await Promise.all((workbench.pois||[]).map(async p=>{try{return[p.id,await api(`/api/campaigns/${campaignId}/pois/${p.id}/state?game_minute=${worldMinute}`)]}catch(_){return[p.id,null]}}));for(const[id,state]of rows)if(state)poiTemporalStates.set(id,state)}
+async function loadPoiTemporalStates(){rebuildHexIndex();poiTemporalStates=new Map();if(!workbench)return;const rows=await Promise.all((workbench.pois||[]).map(async p=>{try{return[p.id,await api(`/api/campaigns/${campaignId}/pois/${p.id}/state?game_minute=${worldMinute}`)]}catch(_){return[p.id,null]}}));for(const[id,state]of rows)if(state)poiTemporalStates.set(id,state)}
 async function applyWorldMinute(){try{worldMinute=syncHiddenMinute('world-time',ui.worldTime);await loadPoiTemporalStates();updateInspector();renderLists();draw();msg(`WorldState · ${formatGameDate(worldMinute)}.`)}catch(err){msg(err.message,true)}}
 
 function axialDistance(a,b){return (Math.abs(a.q-b.q)+Math.abs(a.q+a.r-b.q-b.r)+Math.abs(a.r-b.r))/2}
 function hexWorld(q,r,size=34){return{x:size*1.5*q,y:size*SQRT3*(r+q/2)}}
 function polygon(ctx,x,y,size){ctx.beginPath();for(let i=0;i<6;i++){const a=Math.PI/3*i,px=x+size*Math.cos(a),py=y+size*Math.sin(a);i?ctx.lineTo(px,py):ctx.moveTo(px,py)}ctx.closePath()}
 function offsetBounds(q,r){if(!workbench)return false;const col=q+Math.floor(workbench.width/2),row=r+Math.floor(workbench.height/2)+Math.floor((q+(q&1))/2);return col>=0&&col<workbench.width&&row>=0&&row<workbench.height}
-function materialized(q,r){return workbench?.hexes.find(h=>h.q===q&&h.r===r)||null}
+function rebuildHexIndex(){hexByCoord=new Map((workbench?.hexes||[]).map(h=>[`${h.q},${h.r}`,h]))}
+function materialized(q,r){return hexByCoord.get(`${q},${r}`)||null}
 function virtualHex(q,r){if(!offsetBounds(q,r))return null;const h=materialized(q,r);if(h)return h;const key=workbench.default_terrain_key||'SEA';return{id:null,q,r,terrain_key:key,elevation:0,visibility_score:0,travel_cost:key==='SEA'?2:1,extra_data:{}}}
 function sameHex(a,b){return a&&b&&a.q===b.q&&a.r===b.r}
 function screenCenter(q,r){const rect=ui.canvas.getBoundingClientRect(),p=hexWorld(q,r);return{x:rect.width/2+view.panX+p.x*view.scale,y:rect.height/2+view.panY+p.y*view.scale}}

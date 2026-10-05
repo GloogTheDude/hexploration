@@ -30,6 +30,8 @@ from dto.dm_dashboard_dto import (
     DMPersistentMapCreate,
     DMHexPaintRequest,
     DMHexPaintExact,
+    DMMapHexPaintDelta,
+    DMMapHexWorkbench,
 )
 from dto.expedition_dto import ExpeditionResponse
 from dto.character_dto import CharacterResponse
@@ -46,6 +48,13 @@ from services.authorization import require_same_user
 
 
 router = APIRouter(tags=["dm-dashboard"])
+
+
+def _paint_delta_response(delta: dict) -> DMMapHexPaintDelta:
+    return DMMapHexPaintDelta(
+        upserted=[DMMapHexWorkbench(**row) for row in delta["upserted"]],
+        removed=delta["removed"],
+    )
 
 
 def _current_user_id(current_user: User = Depends(get_current_user)) -> int:
@@ -296,20 +305,20 @@ def create_persistent_map(campaign_id: int, data: DMPersistentMapCreate, user_id
         _raise_http(exc)
 
 
-@router.post("/api/campaigns/{campaign_id}/dm-maps/{map_id}/dm-map-versions/{map_version_id}/hexes/paint", response_model=DMMapWorkbenchResponse)
+@router.post("/api/campaigns/{campaign_id}/dm-maps/{map_id}/dm-map-versions/{map_version_id}/hexes/paint", response_model=DMMapHexPaintDelta)
 def paint_persistent_map(campaign_id: int, map_id: int, map_version_id: int, data: DMHexPaintRequest, user_id: int = Depends(_current_user_id), db: Session = Depends(get_db)):
     try:
-        DMDashboardService(db).paint_persistent_map(campaign_id, user_id, map_id, map_version_id, data)
-        return DMDashboardService(db).get_map_workbench(campaign_id, user_id, map_version_id)
+        delta = DMDashboardService(db).paint_persistent_map(campaign_id, user_id, map_id, map_version_id, data)
+        return _paint_delta_response(delta)
     except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError, MapPersistenceError) as exc:
         _raise_http(exc)
 
 
-@router.put("/api/campaigns/{campaign_id}/dm-maps/{map_id}/dm-map-versions/{map_version_id}/hexes/exact", response_model=DMMapWorkbenchResponse)
+@router.put("/api/campaigns/{campaign_id}/dm-maps/{map_id}/dm-map-versions/{map_version_id}/hexes/exact", response_model=DMMapHexPaintDelta)
 def paint_persistent_map_exact(campaign_id: int, map_id: int, map_version_id: int, data: list[DMHexPaintExact], user_id: int = Depends(_current_user_id), db: Session = Depends(get_db)):
     try:
-        DMDashboardService(db).paint_persistent_map_exact(campaign_id, user_id, map_id, map_version_id, data)
-        return DMDashboardService(db).get_map_workbench(campaign_id, user_id, map_version_id)
+        delta = DMDashboardService(db).paint_persistent_map_exact(campaign_id, user_id, map_id, map_version_id, data)
+        return _paint_delta_response(delta)
     except (NotFoundError, ForbiddenOperationError, ConflictError, ValueError, MapPersistenceError) as exc:
         _raise_http(exc)
 

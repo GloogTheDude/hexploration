@@ -1,6 +1,6 @@
 import { state } from "./state.js?v=320";
 import { pixelToAxial } from "./hex_math.js?v=320";
-import { paintHexesBatchRadiusApi, paintHexesExactApi } from "./api.js?v=320";
+import { fetchPersistentMap, paintHexesBatchRadiusApi, paintHexesExactApi } from "./api.js?v=320";
 import { drawPaintPreview, drawBrushSegmentPreview, mapScreenCenter } from "./renderer.js?v=320";
 
 const pendingCenters = new Map();
@@ -70,6 +70,12 @@ function terrainKeyForTile(tile) {
   return state.map.default_terrain_key || "SEA";
 }
 
+function tileFromPaintRow(row) {
+  const terrain = state.terrains[row.terrain_key];
+  if (!terrain) return null;
+  return { q: row.q, r: row.r, terrain: { ...terrain, elevation: row.elevation, visibility_score: row.visibility_score, travel_cost: row.travel_cost }, pois: [] };
+}
+
 function applyPersistentWorkbench(workbench) {
   state.map.width = workbench.width;
   state.map.height = workbench.height;
@@ -79,15 +85,17 @@ function applyPersistentWorkbench(workbench) {
   state.map.default_terrain_key = workbench.default_terrain_key || "SEA";
   state.map.hexes = {};
   for (const row of workbench.hexes || []) {
-    const terrain = state.terrains[row.terrain_key];
-    if (!terrain) continue;
-    state.map.hexes[`${row.q},${row.r}`] = {
-      q: row.q,
-      r: row.r,
-      terrain: { ...terrain, elevation: row.elevation, visibility_score: row.visibility_score, travel_cost: row.travel_cost },
-      pois: [],
-    };
+    const tile = tileFromPaintRow(row);
+    if (tile) state.map.hexes[`${row.q},${row.r}`] = tile;
   }
+}
+
+function applyPaintDelta(delta) {
+  for (const row of delta?.upserted || []) {
+    const tile = tileFromPaintRow(row);
+    if (tile) state.map.hexes[`${row.q},${row.r}`] = tile;
+  }
+  for (const row of delta?.removed || []) delete state.map.hexes[`${row.q},${row.r}`];
 }
 
 export function beginPaintStroke() {
@@ -121,7 +129,7 @@ async function applyHistorySnapshot(snapshot) {
     payload.push({ q: item.q, r: item.r, terrain_key: terrainKeyForTile(item.tile) });
   }
   const data = await paintHexesExactApi(payload);
-  applyPersistentWorkbench(data);
+  applyPaintDelta(data);
 }
 
 export async function undoPaint() {
@@ -233,9 +241,18 @@ export async function flushPendingPaint() {
   const radius = state.brushRadius;
   inflight = inflight.then(async () => {
     const data = await paintHexesBatchRadiusApi(centers, terrainKey, radius);
-    // Server remains authoritative. The response is the complete sparse
-    // workbench, so undo/redo and edge clipping use the persisted result.
-    applyPersistentWorkbench(data);
+    // Server remains authoritative. Terrain painting only returns changed
+    // overrides; semantic workbench objects are not reloaded here.
+    applyPaintDelta(data);
+  }).catch(async error => {
+    try {
+      const authoritative = await fetchPersistentMap(state.editor.campaignId, state.editor.versionId);
+      applyPersistentWorkbench(authoritative);
+    } catch (_) {
+      // Keep the original error as the user-facing failure.
+    }
+    window.dispatchEvent(new CustomEvent("paint-sync-error", { detail: error }));
+    throw error;
   });
   await inflight;
   // New paint events may have arrived while the request was in flight.

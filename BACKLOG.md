@@ -542,6 +542,34 @@ The World Editor exposes an explicit campaign/dashboard link that preserves the 
 This change is frontend-only and requires no additional PostgreSQL validation.
 
 
+### MAP-PERF-001 — Optimize sparse terrain painting pipeline
+
+Status: `NEEDS_POSTGRES_VALIDATION`
+
+Phase A/P0 scope:
+
+- replace coordinate lookups in map workbench renderers with derived indexes;
+- apply terrain batches in one transaction and load only affected overrides;
+- return/apply terrain deltas instead of reloading the complete workbench;
+- preserve sparse default-terrain and POI support-row behavior;
+- do not introduce chunks, viewport APIs, LOD or streaming.
+
+Result:
+
+- coordinate lookups in the terrain/world workbenches now use derived indexes;
+- exact painting batches are deduplicated and applied in one transaction;
+- only affected overrides are queried and returned as `upserted`/`removed`;
+- successful terrain painting no longer reloads POI, edge or area workbench data;
+- server failures reconcile the local terrain state and surface an error;
+- focused tests pass (`21 passed`), and the complete SQLite suite passes (`297 passed`);
+- PostgreSQL validation remains required because transaction and persistence behavior changed.
+
+Local PostgreSQL validation command:
+
+    TEST_DATABASE_URL='postgresql+psycopg://hexploration:hexploration@localhost:5435/hexploration_test' \
+    ./.venv/bin/pytest -q
+
+
 ---
 
 # Milestone 4 — Deployment

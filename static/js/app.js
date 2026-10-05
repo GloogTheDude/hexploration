@@ -55,6 +55,10 @@ function setMessage(message, error = false) {
   persistMapMessage.classList.toggle("error", error);
 }
 
+window.addEventListener("paint-sync-error", event => {
+  setMessage(event.detail?.message || "La peinture n’a pas pu être synchronisée.", true);
+});
+
 function updateMapSummary() {
   const materialized = state.map?.hexes ? Object.keys(state.map.hexes).length : 0;
   const logical = state.map?.width && state.map?.height ? state.map.width * state.map.height : 0;

@@ -15,6 +15,26 @@ def test_editor_allows_large_maps_and_batches_painting():
     assert "map.sparse" in renderer
 
 
+def test_terrain_paint_uses_delta_responses_without_full_workbench_reload():
+    tools = Path("static/js/tools.js").read_text(encoding="utf-8")
+    api = Path("static/js/api.js").read_text(encoding="utf-8")
+    routes = Path("routes/dm_dashboard_routes.py").read_text(encoding="utf-8")
+    assert "applyPaintDelta" in tools
+    assert "applyPersistentWorkbench(data)" not in tools
+    assert "fetchPersistentMap" in tools
+    assert "DMMapHexPaintDelta" in routes
+    assert 'editorPath("exact")' in api
+
+
+def test_workbench_coordinate_lookups_are_indexed():
+    world = Path("static/js/world.js").read_text(encoding="utf-8")
+    dm = Path("static/js/dm.js").read_text(encoding="utf-8")
+    assert "rebuildHexIndex" in world
+    assert "hexByCoord.get" in world
+    assert "state.mapWorkbench?.hexes?.find(h=>h.q===q&&h.r===r)" not in dm
+    assert "workbenchHexByCoord" in dm
+
+
 def test_editor_defaults_to_one_to_one_and_space_pan():
     app = Path("static/js/app.js").read_text(encoding="utf-8")
     state = Path("static/js/state.js").read_text(encoding="utf-8")
