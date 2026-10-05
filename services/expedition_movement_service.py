@@ -99,6 +99,9 @@ class ExpeditionMovementService:
         if expedition.status != ExpeditionStatus.ACTIVE:
             raise ConflictError("Only an active expedition can move")
 
+        if base_duration_minutes <= 0:
+            raise InvalidMovementError("Movement duration must be greater than zero")
+
         if (
             expedition.current_map_version_id is None
             or expedition.current_q is None

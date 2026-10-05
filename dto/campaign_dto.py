@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from db.models import CampaignRole
 
@@ -10,6 +10,13 @@ class CampaignCreate(BaseModel):
     description: str | None = None
     epoch_name: str = Field(default="Day 1", min_length=1, max_length=80)
     creator_user_id: int
+
+    @field_validator("name", "epoch_name")
+    @classmethod
+    def reject_blank_values(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must contain non-whitespace characters")
+        return value
 
 
 class CampaignResponse(BaseModel):

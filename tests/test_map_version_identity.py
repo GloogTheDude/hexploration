@@ -148,6 +148,39 @@ def test_map_version_with_child_is_immutable_in_place(db: Session, campaign):
         )
 
 
+def test_map_version_update_cannot_move_before_parent_time(db: Session, campaign):
+    from services.errors import ConflictError
+
+    world_map, v1, _, _ = seed_version(db, campaign)
+    v1.effective_from_game_minute = 100
+    db.flush()
+    v2 = MapVersion(
+        map_id=world_map.id,
+        parent_version_id=v1.id,
+        version=2,
+        name="v2",
+        width=2,
+        height=1,
+        hex_size=32,
+        effective_from_game_minute=100,
+    )
+    db.add(v2)
+    db.commit()
+
+    import routes.map_routes as map_routes
+    map_routes.hexmap = Hexmap(2, 1, 32)
+    import pytest
+
+    with pytest.raises(ConflictError, match="after its parent"):
+        MapPersistenceService(db).update_version_from_editor(
+            map_id=world_map.id,
+            map_version_id=v2.id,
+            map_name=world_map.name,
+            version_name=v2.name,
+            effective_from_game_minute=50,
+        )
+
+
 def test_tracked_editor_update_only_persists_dirty_hexes(db: Session, campaign):
     world_map, v1, _, _ = seed_version(db, campaign)
     service = MapPersistenceService(db)

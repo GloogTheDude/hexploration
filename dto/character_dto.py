@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from db.models import CharacterStatus
 
@@ -11,6 +11,13 @@ class CharacterCreate(BaseModel):
     level: int | None = Field(default=None, ge=1)
     description: str | None = None
     current_game_minute: int = Field(default=0, ge=0)
+
+    @field_validator("name")
+    @classmethod
+    def reject_blank_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must contain non-whitespace characters")
+        return value
 
 
 class CharacterResponse(BaseModel):

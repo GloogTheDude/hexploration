@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from db.models import ExpeditionStatus
 
@@ -10,6 +10,13 @@ from db.models import ExpeditionStatus
 class ExpeditionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     start_game_minute: int = Field(default=0, ge=0)
+
+    @field_validator("name")
+    @classmethod
+    def reject_blank_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must contain non-whitespace characters")
+        return value
 
 
 class ExpeditionResponse(BaseModel):

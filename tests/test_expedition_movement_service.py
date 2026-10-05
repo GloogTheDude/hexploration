@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from db.models import Campaign, Movement, WorldEvent
 from services.errors import MovementBlockedError
-from services.expedition_movement_service import ExpeditionMovementService
+from services.expedition_movement_service import ExpeditionMovementService, InvalidMovementError
 from tests.factories import make_active_expedition, make_map_with_two_hexes
 
 
@@ -230,3 +230,37 @@ def test_undo_last_move_restores_position_and_clocks(db: Session, campaign: Camp
     assert db.scalar(select(Movement).where(Movement.id == movement.id)) is None
     from dto.movement_dto import MovementResponse
     assert MovementResponse.model_validate(undone).id == movement.id
+
+
+def test_invalid_destination_does_not_mutate_expedition(db: Session, campaign: Campaign):
+    _, version, _, _ = make_map_with_two_hexes(db, campaign)
+    expedition, _ = make_active_expedition(db, campaign, version, game_minute=100)
+    service = ExpeditionMovementService(db)
+
+    with pytest.raises(InvalidMovementError, match="adjacent"):
+        service.move(
+            expedition_id=expedition.id,
+            to_q=2,
+            to_r=0,
+            base_duration_minutes=60,
+        )
+
+    db.refresh(expedition)
+    assert (expedition.current_q, expedition.current_r, expedition.current_game_minute) == (0, 0, 100)
+    assert db.scalar(select(Movement).where(Movement.expedition_id == expedition.id)) is None
+
+
+def test_non_positive_movement_duration_is_rejected(db: Session, campaign: Campaign):
+    _, version, _, _ = make_map_with_two_hexes(db, campaign)
+    expedition, _ = make_active_expedition(db, campaign, version, game_minute=100)
+
+    with pytest.raises(InvalidMovementError, match="greater than zero"):
+        ExpeditionMovementService(db).move(
+            expedition_id=expedition.id,
+            to_q=1,
+            to_r=0,
+            base_duration_minutes=0,
+        )
+
+    db.refresh(expedition)
+    assert expedition.current_game_minute == 100

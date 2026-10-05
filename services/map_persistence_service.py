@@ -111,6 +111,8 @@ class MapPersistenceService:
     ) -> tuple[WorldMap, MapVersion, int]:
         if self.db.get(Campaign, campaign_id) is None:
             raise NotFoundError("Campaign not found")
+        if effective_from_game_minute < 0:
+            raise ValueError("effective_from_game_minute must be >= 0")
         import routes.map_routes as map_routes
         editor_map = map_routes.hexmap
         world_map = WorldMap(campaign_id=campaign_id, name=name.strip(), description=description)
@@ -335,6 +337,10 @@ class MapPersistenceService:
         if version is None or version.map_id != map_id:
             raise NotFoundError("Map version not found")
 
+        parent = self.db.get(MapVersion, version.parent_version_id) if version.parent_version_id else None
+        if parent is not None and effective_from_game_minute <= parent.effective_from_game_minute:
+            raise ConflictError("A map version must become effective after its parent version")
+
         child = self.db.scalar(select(MapVersion.id).where(MapVersion.parent_version_id == version.id).limit(1))
         movement = self.db.scalar(select(Movement.id).where(Movement.map_version_id == version.id).limit(1))
         expedition = self.db.scalar(select(Expedition.id).where(Expedition.current_map_version_id == version.id).limit(1))
@@ -404,4 +410,3 @@ class MapPersistenceService:
         self.db.refresh(version)
         self._mark_editor_synced(version.id)
         return world_map, version, version.width * version.height
-

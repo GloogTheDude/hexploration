@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class MapSnapshotCreate(BaseModel):
@@ -8,6 +8,13 @@ class MapSnapshotCreate(BaseModel):
     description: str | None = None
     version_name: str | None = Field(default="Initial version", max_length=160)
     effective_from_game_minute: int = Field(default=0, ge=0)
+
+    @field_validator("name")
+    @classmethod
+    def reject_blank_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must contain non-whitespace characters")
+        return value
 
 
 class MapSnapshotResponse(BaseModel):
@@ -63,4 +70,3 @@ class MovementUndoResponse(BaseModel):
     current_q: int
     current_r: int
     current_game_minute: int
-
