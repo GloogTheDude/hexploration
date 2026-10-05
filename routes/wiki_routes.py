@@ -13,6 +13,7 @@ from dto.wiki_dto import (
 )
 from services.errors import ConflictError, ForbiddenOperationError, NotFoundError
 from services.wiki_service import WikiService
+from services.authorization import require_campaign_member, require_expedition_dm, require_expedition_access
 
 router = APIRouter(tags=["wiki"])
 
@@ -45,6 +46,7 @@ def _state_payload(page, revision, as_of_game_minute):
 def publish_expedition_report(
     expedition_id: int,
     data: ExpeditionReportCreate,
+    _access = Depends(require_expedition_dm),
     db: Session = Depends(get_db),
 ):
     try:
@@ -70,6 +72,7 @@ def publish_expedition_report(
 )
 def get_expedition_report(
     expedition_id: int,
+    _access = Depends(require_expedition_access),
     db: Session = Depends(get_db),
 ):
     try:
@@ -87,6 +90,7 @@ def get_expedition_report(
 def list_campaign_wiki(
     campaign_id: int,
     as_of_game_minute: int | None = Query(default=None, ge=0),
+    _membership = Depends(require_campaign_member),
     db: Session = Depends(get_db),
 ):
     try:
@@ -115,6 +119,7 @@ def get_wiki_page(
     campaign_id: int,
     page_id: int,
     as_of_game_minute: int | None = Query(default=None, ge=0),
+    _membership = Depends(require_campaign_member),
     db: Session = Depends(get_db),
 ):
     try:

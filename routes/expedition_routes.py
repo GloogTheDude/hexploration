@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from db.session import get_db
+from db.models import CampaignRole, User
 from dto.expedition_dto import (
     ExpeditionCharacterAdd,
     ExpeditionCharacterResponse,
@@ -10,6 +11,8 @@ from dto.expedition_dto import (
 )
 from services.errors import ConflictError, ForbiddenOperationError, NotFoundError
 from services.expedition_service import ExpeditionService
+from services.auth_dependencies import get_current_user
+from services.authorization import require_campaign_dm, require_campaign_member, require_expedition_access, require_expedition_dm
 
 
 router = APIRouter(tags=["expeditions"])
@@ -33,6 +36,7 @@ def _raise_http(exc: Exception) -> None:
 def create_expedition(
     campaign_id: int,
     data: ExpeditionCreate,
+    _membership = Depends(require_campaign_dm),
     db: Session = Depends(get_db),
 ) -> ExpeditionResponse:
     try:
@@ -48,10 +52,17 @@ def create_expedition(
 )
 def list_campaign_expeditions(
     campaign_id: int,
+    membership = Depends(require_campaign_member),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[ExpeditionResponse]:
     try:
-        expeditions = ExpeditionService(db).list_for_campaign(campaign_id)
+        service = ExpeditionService(db)
+        expeditions = (
+            service.list_for_campaign(campaign_id)
+            if membership.role == CampaignRole.DM
+            else service.list_for_user(campaign_id, current_user.id)
+        )
         return [ExpeditionResponse.model_validate(e) for e in expeditions]
     except (NotFoundError, ForbiddenOperationError, ConflictError) as exc:
         _raise_http(exc)
@@ -63,6 +74,7 @@ def list_campaign_expeditions(
 )
 def get_expedition(
     expedition_id: int,
+    _access = Depends(require_expedition_access),
     db: Session = Depends(get_db),
 ) -> ExpeditionResponse:
     try:
@@ -81,6 +93,7 @@ def get_expedition(
 def add_character_to_expedition(
     expedition_id: int,
     data: ExpeditionCharacterAdd,
+    _access = Depends(require_expedition_dm),
     db: Session = Depends(get_db),
 ) -> ExpeditionCharacterResponse:
     try:
@@ -99,6 +112,7 @@ def add_character_to_expedition(
 )
 def list_expedition_characters(
     expedition_id: int,
+    _access = Depends(require_expedition_access),
     db: Session = Depends(get_db),
 ) -> list[ExpeditionCharacterResponse]:
     try:
@@ -117,6 +131,7 @@ def list_expedition_characters(
 )
 def start_expedition(
     expedition_id: int,
+    _access = Depends(require_expedition_dm),
     db: Session = Depends(get_db),
 ) -> ExpeditionResponse:
     try:
@@ -132,6 +147,7 @@ def start_expedition(
 )
 def return_expedition_to_hub(
     expedition_id: int,
+    _access = Depends(require_expedition_dm),
     db: Session = Depends(get_db),
 ) -> ExpeditionResponse:
     try:

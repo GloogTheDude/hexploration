@@ -8,6 +8,7 @@ from dto.visibility_dto import (
 )
 from services.errors import ConflictError, NotFoundError
 from services.visibility_service import VisibilityService
+from services.authorization import require_expedition_access
 
 
 router = APIRouter(tags=["visibility"])
@@ -112,6 +113,7 @@ def _scan_payload(scan) -> dict:
 )
 def preview_visibility(
     expedition_id: int,
+    _access = Depends(require_expedition_access),
     db: Session = Depends(get_db),
 ):
     try:
@@ -127,6 +129,7 @@ def preview_visibility(
 )
 def observe_visibility(
     expedition_id: int,
+    _access = Depends(require_expedition_access),
     db: Session = Depends(get_db),
 ):
     try:

@@ -12,6 +12,7 @@ from services.movement_modifiers import (
     TRANSPORT_MODIFIERS,
     WEATHER_MODIFIERS,
 )
+from services.authorization import require_expedition_access, require_expedition_dm
 
 
 router = APIRouter(tags=["movement modifiers"])
@@ -37,6 +38,7 @@ def get_available_movement_modifiers():
 )
 def get_modifiers(
     expedition_id: int,
+    _access = Depends(require_expedition_access),
     db: Session = Depends(get_db),
 ):
     try:
@@ -58,6 +60,7 @@ def get_modifiers(
 def update_modifiers(
     expedition_id: int,
     data: MovementModifierSet,
+    _access = Depends(require_expedition_dm),
     db: Session = Depends(get_db),
 ):
     try:

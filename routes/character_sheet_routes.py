@@ -7,8 +7,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from db.models import CharacterSheetVersion
+from db.models import CharacterSheetVersion, User
 from db.session import get_db
+from services.auth_dependencies import get_current_user
+from services.authorization import require_character_access
 from services.character_sheet_service import (
     CharacterNotFoundError, CharacterSheetForbiddenError, CharacterSheetService,
     CharacterSheetTemplateError, InvalidCharacterSheetError, SheetNotFoundError,
@@ -47,46 +49,46 @@ def _errors(exc: Exception) -> HTTPException:
 
 
 @router.post("/template", response_model=CharacterSheetResponse, status_code=status.HTTP_201_CREATED)
-def create_blank_character_sheet(character_id: int, user_id: int, db: Session = Depends(get_db)) -> CharacterSheetResponse:
+def create_blank_character_sheet(character_id: int, current_user: User = Depends(get_current_user), _character = Depends(require_character_access), db: Session = Depends(get_db)) -> CharacterSheetResponse:
     try:
-        return CharacterSheetResponse.from_model(CharacterSheetService(db).create_from_template(character_id, user_id))
+        return CharacterSheetResponse.from_model(CharacterSheetService(db).create_from_template(character_id, current_user.id))
     except (CharacterNotFoundError, CharacterSheetForbiddenError, CharacterSheetTemplateError) as exc:
         raise _errors(exc)
 
 
 @router.post("", response_model=CharacterSheetResponse, status_code=status.HTTP_201_CREATED)
-async def upload_character_sheet(character_id: int, user_id: int, file: UploadFile = File(...),
+async def upload_character_sheet(character_id: int, current_user: User = Depends(get_current_user), _character = Depends(require_character_access), file: UploadFile = File(...),
                                  campaign_game_minute: int | None = Form(default=None),
                                  expedition_id: int | None = Form(default=None),
                                  db: Session = Depends(get_db)) -> CharacterSheetResponse:
     try:
-        sheet = await CharacterSheetService(db).upload(character_id, file, campaign_game_minute, expedition_id, user_id=user_id)
+        sheet = await CharacterSheetService(db).upload(character_id, file, campaign_game_minute, expedition_id, user_id=current_user.id)
         return CharacterSheetResponse.from_model(sheet)
     except (CharacterNotFoundError, CharacterSheetForbiddenError, InvalidCharacterSheetError) as exc:
         raise _errors(exc)
 
 
 @router.get("", response_model=list[CharacterSheetResponse])
-def list_character_sheets(character_id: int, user_id: int, db: Session = Depends(get_db)) -> list[CharacterSheetResponse]:
+def list_character_sheets(character_id: int, current_user: User = Depends(get_current_user), _character = Depends(require_character_access), db: Session = Depends(get_db)) -> list[CharacterSheetResponse]:
     try:
-        return [CharacterSheetResponse.from_model(s) for s in CharacterSheetService(db).history(character_id, user_id)]
+        return [CharacterSheetResponse.from_model(s) for s in CharacterSheetService(db).history(character_id, current_user.id)]
     except (CharacterNotFoundError, CharacterSheetForbiddenError) as exc:
         raise _errors(exc)
 
 
 @router.get("/current", response_model=CharacterSheetResponse)
-def get_current_character_sheet_metadata(character_id: int, user_id: int, db: Session = Depends(get_db)) -> CharacterSheetResponse:
+def get_current_character_sheet_metadata(character_id: int, current_user: User = Depends(get_current_user), _character = Depends(require_character_access), db: Session = Depends(get_db)) -> CharacterSheetResponse:
     try:
-        return CharacterSheetResponse.from_model(CharacterSheetService(db).current(character_id, user_id))
+        return CharacterSheetResponse.from_model(CharacterSheetService(db).current(character_id, current_user.id))
     except (CharacterNotFoundError, CharacterSheetForbiddenError, SheetNotFoundError) as exc:
         raise _errors(exc)
 
 
 @router.get("/current/pdf", response_class=FileResponse)
-def open_current_character_sheet(character_id: int, user_id: int, db: Session = Depends(get_db)) -> FileResponse:
+def open_current_character_sheet(character_id: int, current_user: User = Depends(get_current_user), _character = Depends(require_character_access), db: Session = Depends(get_db)) -> FileResponse:
     service = CharacterSheetService(db)
     try:
-        sheet = service.current(character_id, user_id)
+        sheet = service.current(character_id, current_user.id)
         path = service.path_for(sheet)
     except (CharacterNotFoundError, CharacterSheetForbiddenError, SheetNotFoundError) as exc:
         raise _errors(exc)
@@ -94,10 +96,10 @@ def open_current_character_sheet(character_id: int, user_id: int, db: Session = 
 
 
 @router.get("/{version}/pdf", response_class=FileResponse)
-def open_character_sheet_version(character_id: int, version: int, user_id: int, db: Session = Depends(get_db)) -> FileResponse:
+def open_character_sheet_version(character_id: int, version: int, current_user: User = Depends(get_current_user), _character = Depends(require_character_access), db: Session = Depends(get_db)) -> FileResponse:
     service = CharacterSheetService(db)
     try:
-        sheet = service.version(character_id, version, user_id)
+        sheet = service.version(character_id, version, current_user.id)
         path = service.path_for(sheet)
     except (CharacterNotFoundError, CharacterSheetForbiddenError, SheetNotFoundError) as exc:
         raise _errors(exc)

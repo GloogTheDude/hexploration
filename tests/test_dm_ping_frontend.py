@@ -17,10 +17,11 @@ def test_dm_ping_is_independent_and_has_distinct_symbol():
     assert "state.dm_ping_color" in PLAYER_JS
 
 
-def test_player_map_payload_contains_dm_ping():
+def test_player_map_payload_excludes_dm_ping_from_player_view():
     dto = (ROOT / "dto/player_map_dto.py").read_text()
     routes = (ROOT / "routes/player_map_routes.py").read_text()
     assert "dm_ping_q: int | None = None" in dto
     assert "dm_ping_created_at: datetime | None = None" in dto
-    assert "dm_ping_q=dm_ping.q" in routes
-    assert "dm_ping_color=dm_ping.color" in routes
+    assert "dm_ping_q=None" in routes
+    assert "dm_ping_user_id=None" in routes
+    assert "dm_ping_color=None" in routes

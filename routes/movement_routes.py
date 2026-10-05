@@ -25,6 +25,7 @@ from services.map_persistence_service import (
     MapPersistenceError,
     MapPersistenceService,
 )
+from services.authorization import require_campaign_dm, require_expedition_dm
 
 
 router = APIRouter(tags=["movement"])
@@ -56,6 +57,7 @@ def _raise_http(exc: Exception) -> None:
 def persist_current_editor_map(
     campaign_id: int,
     data: MapSnapshotCreate,
+    _membership = Depends(require_campaign_dm),
     db: Session = Depends(get_db),
 ) -> MapSnapshotResponse:
     try:
@@ -89,6 +91,7 @@ def persist_current_editor_map(
 def set_expedition_position(
     expedition_id: int,
     data: ExpeditionPositionSet,
+    _access = Depends(require_expedition_dm),
     db: Session = Depends(get_db),
 ) -> ExpeditionPositionResponse:
     try:
@@ -120,6 +123,7 @@ def set_expedition_position(
 def move_expedition(
     expedition_id: int,
     data: ExpeditionMoveRequest,
+    _access = Depends(require_expedition_dm),
     db: Session = Depends(get_db),
 ) -> MovementResponse:
     try:
@@ -146,6 +150,7 @@ def move_expedition(
 )
 def undo_expedition_move(
     expedition_id: int,
+    _access = Depends(require_expedition_dm),
     db: Session = Depends(get_db),
 ) -> MovementUndoResponse:
     try:
@@ -167,6 +172,7 @@ def undo_expedition_move(
 )
 def list_expedition_movements(
     expedition_id: int,
+    _access = Depends(require_expedition_dm),
     db: Session = Depends(get_db),
 ) -> list[MovementResponse]:
     try:

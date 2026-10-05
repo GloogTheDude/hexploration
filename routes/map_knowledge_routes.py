@@ -10,6 +10,7 @@ from dto.map_knowledge_dto import (
 )
 from services.errors import ForbiddenOperationError, NotFoundError
 from services.map_knowledge_service import MapKnowledgeService
+from services.authorization import require_character_access, require_expedition_access
 
 
 router = APIRouter(tags=["map-knowledge"])
@@ -30,6 +31,7 @@ def _raise_http(exc: Exception) -> None:
 def character_map_knowledge(
     character_id: int,
     map_id: int,
+    _character = Depends(require_character_access),
     as_of_game_minute: int | None = Query(default=None, ge=0),
     db: Session = Depends(get_db),
 ):
@@ -58,6 +60,7 @@ def character_hex_knowledge(
     map_id: int,
     q: int,
     r: int,
+    _character = Depends(require_character_access),
     as_of_game_minute: int | None = Query(default=None, ge=0),
     db: Session = Depends(get_db),
 ):
@@ -82,6 +85,7 @@ def character_hex_history(
     map_id: int,
     q: int,
     r: int,
+    _character = Depends(require_character_access),
     db: Session = Depends(get_db),
 ):
     try:
@@ -102,6 +106,7 @@ def character_hex_history(
 def expedition_map_knowledge(
     expedition_id: int,
     map_id: int,
+    _access = Depends(require_expedition_access),
     as_of_game_minute: int | None = Query(default=None, ge=0),
     db: Session = Depends(get_db),
 ):

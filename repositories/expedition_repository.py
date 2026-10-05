@@ -46,6 +46,20 @@ class ExpeditionRepository:
         )
         return list(self.db.scalars(stmt))
 
+    def list_for_user(self, campaign_id: int, user_id: int) -> list[Expedition]:
+        stmt = (
+            select(Expedition)
+            .join(ExpeditionCharacter, ExpeditionCharacter.expedition_id == Expedition.id)
+            .join(Character, Character.id == ExpeditionCharacter.character_id)
+            .where(
+                Expedition.campaign_id == campaign_id,
+                Character.owner_user_id == user_id,
+            )
+            .distinct()
+            .order_by(Expedition.created_at.desc(), Expedition.id.desc())
+        )
+        return list(self.db.scalars(stmt))
+
     def get_participant(
         self,
         expedition_id: int,

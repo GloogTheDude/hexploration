@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from fastapi.responses import Response
+from db.models import User
 
 from db.session import get_db
 from dto.dm_dashboard_dto import (
@@ -39,9 +40,15 @@ from services.dm_dashboard_service import DMDashboardService
 from services.map_persistence_service import MapPersistenceError
 from services.map_export_service import MapExportService
 from services.errors import ConflictError, ForbiddenOperationError, NotFoundError
+from services.auth_dependencies import get_current_user
+from services.authorization import require_same_user
 
 
 router = APIRouter(tags=["dm-dashboard"])
+
+
+def _current_user_id(current_user: User = Depends(get_current_user)) -> int:
+    return current_user.id
 
 
 def _raise_http(exc: Exception) -> None:
@@ -57,8 +64,9 @@ def _raise_http(exc: Exception) -> None:
 
 
 @router.get("/api/users/{user_id}/dm-campaigns", response_model=list[DMCampaignSummary])
-def list_dm_campaigns(user_id: int, db: Session = Depends(get_db)):
-    return DMDashboardService(db).list_dm_campaigns(user_id)
+def list_dm_campaigns(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    require_same_user(user_id, current_user)
+    return DMDashboardService(db).list_dm_campaigns(current_user.id)
 
 
 
@@ -67,7 +75,7 @@ def list_dm_campaigns(user_id: int, db: Session = Depends(get_db)):
 def update_dm_campaign(
     campaign_id: int,
     data: DMCampaignUpdate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -79,7 +87,7 @@ def update_dm_campaign(
 @router.delete("/api/campaigns/{campaign_id}/dm-settings", status_code=204)
 def delete_dm_campaign(
     campaign_id: int,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -93,7 +101,7 @@ def delete_dm_campaign(
 def delete_dm_map(
     campaign_id: int,
     map_id: int,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -110,7 +118,7 @@ def export_dm_map_version(
     format: str = Query(default="png"),
     mode: str = Query(default="world"),
     quality: str = Query(default="high"),
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -132,7 +140,7 @@ def export_dm_map_version(
 @router.get("/api/campaigns/{campaign_id}/dm-dashboard", response_model=DMDashboardResponse)
 def dm_dashboard(
     campaign_id: int,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -149,7 +157,7 @@ def dm_dashboard(
 def create_dm_expedition(
     campaign_id: int,
     data: DMExpeditionPlanCreate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -165,7 +173,7 @@ def create_dm_expedition(
 def start_dm_expedition(
     campaign_id: int,
     expedition_id: int,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -182,7 +190,7 @@ def start_dm_expedition(
 def return_dm_expedition(
     campaign_id: int,
     expedition_id: int,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -200,7 +208,7 @@ def reveal_dm_poi(
     campaign_id: int,
     expedition_id: int,
     poi_id: int,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -225,7 +233,7 @@ def hide_dm_poi(
     campaign_id: int,
     expedition_id: int,
     poi_id: int,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -251,7 +259,7 @@ def hide_dm_poi(
 def dm_add_member(
     campaign_id: int,
     data: DMMemberAdd,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -268,7 +276,7 @@ def dm_add_member(
 def dm_create_character(
     campaign_id: int,
     data: DMCharacterCreate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -286,7 +294,7 @@ def dm_create_character(
 def dm_snapshot_editor_map(
     campaign_id: int,
     data: DMEditorMapCreate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -314,7 +322,7 @@ def dm_snapshot_editor_map(
 def dm_load_map_version_into_editor(
     campaign_id: int,
     map_version_id: int,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -340,7 +348,7 @@ def dm_snapshot_new_map_version(
     campaign_id: int,
     map_id: int,
     data: DMEditorMapVersionCreate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -369,7 +377,7 @@ def dm_update_map_version_from_editor(
     map_id: int,
     map_version_id: int,
     data: DMEditorMapVersionUpdate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -396,7 +404,7 @@ def dm_update_map_version_from_editor(
 def dm_map_workbench(
     campaign_id: int,
     map_version_id: int = Query(gt=0),
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -414,7 +422,7 @@ def dm_map_workbench(
 def dm_world_editor_snapshot(
     campaign_id: int,
     map_version_id: int,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -431,7 +439,7 @@ def dm_restore_world_editor_snapshot(
     campaign_id: int,
     map_version_id: int,
     data: DMWorldEditorSnapshot,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -449,7 +457,7 @@ def dm_clear_hex_features(
     campaign_id: int,
     map_version_id: int,
     data: DMHexFeatureClear,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -468,7 +476,7 @@ def dm_create_poi(
     campaign_id: int,
     map_version_id: int,
     data: DMPOICreate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -485,7 +493,7 @@ def dm_update_poi(
     campaign_id: int,
     poi_id: int,
     data: DMPOIUpdate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -498,7 +506,7 @@ def dm_update_poi(
 def dm_delete_poi(
     campaign_id: int,
     poi_id: int,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -516,7 +524,7 @@ def dm_create_linear_feature(
     campaign_id: int,
     map_version_id: int,
     data: DMLinearFeatureCreate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -532,7 +540,7 @@ def dm_create_linear_feature(
 def dm_merge_linear_features(
     campaign_id: int,
     data: DMLinearFeatureMerge,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -549,7 +557,7 @@ def dm_update_linear_feature(
     campaign_id: int,
     edge_id: int,
     data: DMLinearFeatureUpdate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -565,7 +573,7 @@ def dm_update_area_feature(
     campaign_id: int,
     area_id: int,
     data: DMAreaFeatureUpdate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -578,7 +586,7 @@ def dm_update_area_feature(
 def dm_delete_linear_feature(
     campaign_id: int,
     edge_id: int,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -592,7 +600,7 @@ def dm_delete_linear_feature(
 def dm_delete_area_feature(
     campaign_id: int,
     area_id: int,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -610,7 +618,7 @@ def dm_create_area_feature(
     campaign_id: int,
     map_version_id: int,
     data: DMAreaFeatureCreate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -628,7 +636,7 @@ def dm_create_feature_edge(
     campaign_id: int,
     map_version_id: int,
     data: DMFeatureEdgeCreate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -646,7 +654,7 @@ def dm_create_poi_world_event(
     campaign_id: int,
     poi_id: int,
     data: DMTargetWorldEventCreate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:
@@ -664,7 +672,7 @@ def dm_create_edge_world_event(
     campaign_id: int,
     edge_id: int,
     data: DMTargetWorldEventCreate,
-    user_id: int = Query(gt=0),
+    user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
     try:

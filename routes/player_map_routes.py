@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from db.session import get_db
+from db.models import User
 from dto.player_map_dto import (
     PlayerMapBootstrapResponse,
     PlayerMapHexResponse,
@@ -15,6 +16,8 @@ from dto.player_map_dto import (
 from services.errors import ConflictError, ForbiddenOperationError, NotFoundError
 from services.expedition_ping_service import ExpeditionPingService
 from services.player_map_service import PlayerMapService
+from services.auth_dependencies import get_current_user
+from services.authorization import require_expedition_access, require_expedition_dm
 
 
 router = APIRouter(tags=["player-map"])
@@ -24,7 +27,11 @@ router = APIRouter(tags=["player-map"])
     "/api/expeditions/{expedition_id}/player-map",
     response_model=PlayerMapResponse,
 )
-def player_map(expedition_id: int, db: Session = Depends(get_db)):
+def player_map(
+    expedition_id: int,
+    _access = Depends(require_expedition_access),
+    db: Session = Depends(get_db),
+):
     try:
         state = PlayerMapService(db).get(expedition_id)
     except NotFoundError as exc:
@@ -35,7 +42,6 @@ def player_map(expedition_id: int, db: Session = Depends(get_db)):
     expedition = state.expedition
     ping_service = ExpeditionPingService(db)
     ping = ping_service.get_ping(expedition.id)
-    dm_ping = ping_service.get_dm_ping(expedition.id)
     return PlayerMapResponse(
         expedition_id=expedition.id,
         expedition_name=expedition.name,
@@ -57,13 +63,15 @@ def player_map(expedition_id: int, db: Session = Depends(get_db)):
         ping_username=ping.username,
         ping_color=ping.color,
         ping_created_at=ping.created_at,
-        dm_ping_q=dm_ping.q,
-        dm_ping_r=dm_ping.r,
-        dm_ping_game_minute=dm_ping.game_minute,
-        dm_ping_user_id=dm_ping.user_id,
-        dm_ping_username=dm_ping.username,
-        dm_ping_color=dm_ping.color,
-        dm_ping_created_at=dm_ping.created_at,
+        # DM pings are intentionally excluded from the player-view payload.
+        # DMs use the separate /dm-ping endpoint when they need that state.
+        dm_ping_q=None,
+        dm_ping_r=None,
+        dm_ping_game_minute=None,
+        dm_ping_user_id=None,
+        dm_ping_username=None,
+        dm_ping_color=None,
+        dm_ping_created_at=None,
         hexes=[
             PlayerMapHexResponse(
                 q=row.q,
@@ -114,7 +122,11 @@ def player_map(expedition_id: int, db: Session = Depends(get_db)):
     "/api/expeditions/{expedition_id}/player-map/bootstrap",
     response_model=PlayerMapBootstrapResponse,
 )
-def bootstrap_player_map(expedition_id: int, db: Session = Depends(get_db)):
+def bootstrap_player_map(
+    expedition_id: int,
+    _access = Depends(require_expedition_access),
+    db: Session = Depends(get_db),
+):
     try:
         initialized, map_count, poi_count = PlayerMapService(db).bootstrap(expedition_id)
     except NotFoundError as exc:
@@ -134,7 +146,11 @@ def bootstrap_player_map(expedition_id: int, db: Session = Depends(get_db)):
     "/api/expeditions/{expedition_id}/ping",
     response_model=ExpeditionPingResponse,
 )
-def get_expedition_ping(expedition_id: int, db: Session = Depends(get_db)):
+def get_expedition_ping(
+    expedition_id: int,
+    _access = Depends(require_expedition_access),
+    db: Session = Depends(get_db),
+):
     try:
         expedition = ExpeditionPingService(db).get_ping(expedition_id)
     except NotFoundError as exc:
@@ -151,10 +167,14 @@ def get_expedition_ping(expedition_id: int, db: Session = Depends(get_db)):
     response_model=ExpeditionPingResponse,
 )
 def set_expedition_ping(
-    expedition_id: int, data: ExpeditionPingSet, user_id: int = Query(gt=0), db: Session = Depends(get_db)
+    expedition_id: int,
+    data: ExpeditionPingSet,
+    current_user: User = Depends(get_current_user),
+    _access = Depends(require_expedition_access),
+    db: Session = Depends(get_db),
 ):
     try:
-        expedition = ExpeditionPingService(db).set_ping(expedition_id, user_id, data.q, data.r)
+        expedition = ExpeditionPingService(db).set_ping(expedition_id, current_user.id, data.q, data.r)
     except (NotFoundError, ConflictError, ForbiddenOperationError, ValueError) as exc:
         code = status.HTTP_404_NOT_FOUND if isinstance(exc, NotFoundError) else status.HTTP_403_FORBIDDEN if isinstance(exc, ForbiddenOperationError) else status.HTTP_409_CONFLICT if isinstance(exc, ConflictError) else status.HTTP_422_UNPROCESSABLE_ENTITY
         raise HTTPException(code, str(exc)) from exc
@@ -165,7 +185,11 @@ def set_expedition_ping(
     "/api/expeditions/{expedition_id}/ping",
     response_model=ExpeditionPingResponse,
 )
-def clear_expedition_ping(expedition_id: int, db: Session = Depends(get_db)):
+def clear_expedition_ping(
+    expedition_id: int,
+    _access = Depends(require_expedition_access),
+    db: Session = Depends(get_db),
+):
     try:
         expedition = ExpeditionPingService(db).clear_ping(expedition_id)
     except NotFoundError as exc:
@@ -177,7 +201,11 @@ def clear_expedition_ping(expedition_id: int, db: Session = Depends(get_db)):
     "/api/expeditions/{expedition_id}/dm-ping",
     response_model=ExpeditionPingResponse,
 )
-def get_expedition_dm_ping(expedition_id: int, db: Session = Depends(get_db)):
+def get_expedition_dm_ping(
+    expedition_id: int,
+    _access = Depends(require_expedition_dm),
+    db: Session = Depends(get_db),
+):
     try:
         ping = ExpeditionPingService(db).get_dm_ping(expedition_id)
     except NotFoundError as exc:
@@ -193,10 +221,14 @@ def get_expedition_dm_ping(expedition_id: int, db: Session = Depends(get_db)):
     response_model=ExpeditionPingResponse,
 )
 def set_expedition_dm_ping(
-    expedition_id: int, data: ExpeditionPingSet, user_id: int = Query(gt=0), db: Session = Depends(get_db)
+    expedition_id: int,
+    data: ExpeditionPingSet,
+    current_user: User = Depends(get_current_user),
+    _access = Depends(require_expedition_dm),
+    db: Session = Depends(get_db),
 ):
     try:
-        ping = ExpeditionPingService(db).set_dm_ping(expedition_id, user_id, data.q, data.r)
+        ping = ExpeditionPingService(db).set_dm_ping(expedition_id, current_user.id, data.q, data.r)
     except (NotFoundError, ConflictError, ForbiddenOperationError, ValueError) as exc:
         code = status.HTTP_404_NOT_FOUND if isinstance(exc, NotFoundError) else status.HTTP_403_FORBIDDEN if isinstance(exc, ForbiddenOperationError) else status.HTTP_409_CONFLICT if isinstance(exc, ConflictError) else status.HTTP_422_UNPROCESSABLE_ENTITY
         raise HTTPException(code, str(exc)) from exc

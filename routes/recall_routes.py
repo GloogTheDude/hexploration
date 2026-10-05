@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from db.models import User
 
 from db.session import get_db
 from dto.wiki_dto import (
@@ -15,6 +16,8 @@ from dto.wiki_dto import (
 )
 from services.errors import ConflictError, ForbiddenOperationError, NotFoundError
 from services.recall_service import RecallService
+from services.auth_dependencies import get_current_user
+from services.authorization import require_expedition_access, require_expedition_character_access
 
 router = APIRouter(tags=["knowledge-recall"])
 
@@ -46,6 +49,7 @@ def _recalled_payload(state) -> RecalledPageResponse:
 def recall_status(
     expedition_id: int,
     character_id: int = Query(gt=0),
+    _access = Depends(require_expedition_character_access),
     db: Session = Depends(get_db),
 ):
     try:
@@ -63,6 +67,7 @@ def search_recallable_wiki(
     expedition_id: int,
     character_id: int = Query(gt=0),
     q: str = Query(min_length=1),
+    _access = Depends(require_expedition_character_access),
     db: Session = Depends(get_db),
 ):
     service = RecallService(db)
@@ -94,9 +99,14 @@ def search_recallable_wiki(
 def recall_page(
     expedition_id: int,
     data: RecallRequest,
+    current_user: User = Depends(get_current_user),
+    _access = Depends(require_expedition_access),
     db: Session = Depends(get_db),
 ):
     try:
+        require_expedition_character_access(
+            expedition_id, data.character_id, current_user, db
+        )
         state = RecallService(db).recall_page(
             expedition_id,
             data.character_id,
@@ -113,6 +123,7 @@ def recall_page(
 )
 def list_recalled_pages(
     expedition_id: int,
+    _access = Depends(require_expedition_access),
     db: Session = Depends(get_db),
 ):
     try:

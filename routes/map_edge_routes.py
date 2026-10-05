@@ -7,6 +7,7 @@ from db.session import get_db
 from dto.map_edge_dto import MapEdgeCreate, MapEdgeResponse
 from services.errors import ConflictError, NotFoundError
 from services.map_edge_service import MapEdgeService
+from services.authorization import require_map_edge_dm, require_map_version_dm
 
 
 router = APIRouter(tags=["map edges"])
@@ -30,6 +31,7 @@ def _raise_http(exc: Exception) -> None:
 def create_map_edge(
     map_version_id: int,
     data: MapEdgeCreate,
+    _version = Depends(require_map_version_dm),
     db: Session = Depends(get_db),
 ):
     try:
@@ -42,7 +44,7 @@ def create_map_edge(
     "/api/map-versions/{map_version_id}/edges",
     response_model=list[MapEdgeResponse],
 )
-def list_map_edges(map_version_id: int, db: Session = Depends(get_db)):
+def list_map_edges(map_version_id: int, _version = Depends(require_map_version_dm), db: Session = Depends(get_db)):
     try:
         return MapEdgeService(db).list_for_map_version(map_version_id)
     except NotFoundError as exc:
@@ -53,7 +55,7 @@ def list_map_edges(map_version_id: int, db: Session = Depends(get_db)):
     "/api/map-edges/{edge_id}",
     response_model=MapEdgeResponse,
 )
-def get_map_edge(edge_id: int, db: Session = Depends(get_db)):
+def get_map_edge(edge_id: int, _edge = Depends(require_map_edge_dm), db: Session = Depends(get_db)):
     try:
         return MapEdgeService(db).get(edge_id)
     except NotFoundError as exc:
@@ -64,7 +66,7 @@ def get_map_edge(edge_id: int, db: Session = Depends(get_db)):
     "/api/map-edges/{edge_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_map_edge(edge_id: int, db: Session = Depends(get_db)):
+def delete_map_edge(edge_id: int, _edge = Depends(require_map_edge_dm), db: Session = Depends(get_db)):
     try:
         MapEdgeService(db).delete(edge_id)
     except NotFoundError as exc:

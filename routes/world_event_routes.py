@@ -12,6 +12,7 @@ from dto.world_event_dto import (
 )
 from services.errors import ForbiddenOperationError, NotFoundError
 from services.world_event_service import WorldEventService
+from services.authorization import require_campaign_dm, require_campaign_member, require_world_event_dm, require_world_event_member
 
 
 router = APIRouter(tags=["world events"])
@@ -35,6 +36,7 @@ def _raise_domain_error(exc: Exception) -> None:
 def create_world_event(
     campaign_id: int,
     data: WorldEventCreate,
+    _membership = Depends(require_campaign_dm),
     db: Session = Depends(get_db),
 ):
     try:
@@ -47,7 +49,7 @@ def create_world_event(
     "/api/world-events/{event_id}",
     response_model=WorldEventResponse,
 )
-def get_world_event(event_id: int, db: Session = Depends(get_db)):
+def get_world_event(event_id: int, _event = Depends(require_world_event_member), db: Session = Depends(get_db)):
     try:
         return WorldEventService(db).get(event_id)
     except NotFoundError as exc:
@@ -61,6 +63,7 @@ def get_world_event(event_id: int, db: Session = Depends(get_db)):
 def update_world_event(
     event_id: int,
     data: WorldEventUpdate,
+    _event = Depends(require_world_event_dm),
     db: Session = Depends(get_db),
 ):
     try:
@@ -73,7 +76,7 @@ def update_world_event(
     "/api/world-events/{event_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_world_event(event_id: int, db: Session = Depends(get_db)):
+def delete_world_event(event_id: int, _event = Depends(require_world_event_dm), db: Session = Depends(get_db)):
     try:
         WorldEventService(db).delete(event_id)
     except NotFoundError as exc:
@@ -92,6 +95,7 @@ def list_world_events(
     event_type: str | None = None,
     target_type: str | None = None,
     target_id: int | None = None,
+    _membership = Depends(require_campaign_member),
     db: Session = Depends(get_db),
 ):
     try:
@@ -114,6 +118,7 @@ def list_world_events(
 def get_world_state(
     campaign_id: int,
     game_minute: int = Query(ge=0),
+    _membership = Depends(require_campaign_member),
     db: Session = Depends(get_db),
 ):
     try:

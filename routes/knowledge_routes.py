@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from db.models import User
 
 from db.session import get_db
 from dto.knowledge_dto import (
@@ -9,6 +10,8 @@ from dto.knowledge_dto import (
 )
 from services.errors import ConflictError, ForbiddenOperationError, NotFoundError
 from services.knowledge_service import KnowledgeService
+from services.auth_dependencies import get_current_user
+from services.authorization import require_character_access, require_expedition_access
 
 router = APIRouter(tags=["knowledge"])
 
@@ -33,6 +36,7 @@ def _raise_domain_error(exc: Exception) -> None:
 def discover_poi(
     expedition_id: int,
     poi_id: int,
+    _access = Depends(require_expedition_access),
     db: Session = Depends(get_db),
 ):
     try:
@@ -53,6 +57,7 @@ def discover_poi(
 )
 def list_character_knowledge(
     character_id: int,
+    _character = Depends(require_character_access),
     as_of_game_minute: int | None = Query(default=None, ge=0),
     db: Session = Depends(get_db),
 ):
@@ -78,6 +83,7 @@ def get_latest_target_knowledge(
     character_id: int,
     target_type: str,
     target_id: int,
+    _character = Depends(require_character_access),
     as_of_game_minute: int | None = Query(default=None, ge=0),
     db: Session = Depends(get_db),
 ):
@@ -100,6 +106,7 @@ def get_target_knowledge_history(
     character_id: int,
     target_type: str,
     target_id: int,
+    _character = Depends(require_character_access),
     db: Session = Depends(get_db),
 ):
     try:

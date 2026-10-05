@@ -49,6 +49,11 @@ class ExpeditionService:
             raise NotFoundError("Campaign not found")
         return self.repo.list_for_campaign(campaign_id)
 
+    def list_for_user(self, campaign_id: int, user_id: int) -> list[Expedition]:
+        if self.campaigns.get(campaign_id) is None:
+            raise NotFoundError("Campaign not found")
+        return self.repo.list_for_user(campaign_id, user_id)
+
     def add_character(
         self,
         expedition_id: int,
